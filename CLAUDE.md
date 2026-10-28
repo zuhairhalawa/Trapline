@@ -1,0 +1,30 @@
+# CLAUDE.md - TRAPLINE
+
+Read this file, HANDOVER.md, docs/RULES.md and docs/QA-A1.md before changing anything. In bare mode nothing is auto-loaded.
+
+## What this is
+Browser tactical puzzle (React + TypeScript strict + Vite, plain CSS, Vitest, Playwright, npm). Player lures one intruder into a honeypot while one courier delivers. Stage A1 = three levels, unreleased. Owner: Zuhair Halawa (GitHub zuhairhalawa).
+
+## Layout
+- `src/engine/` pure deterministic engine (no React, no animation). `resolveTurn` is the ONLY transition function; preview and Advance both use it. States are frozen.
+- `src/levels/levels.ts` declarative levels, stable node IDs (IDs drive tie-breaks; x/y are presentation only).
+- `src/ui/` React: `gameReducer.ts` (pure session: undo history, selection, animation lock), `GameScreen`, `TitleScreen`, `About`, `App`.
+- `src/presentation/` SVG board (`Board.tsx`), pieces (`pieces.tsx`), wording (`text.ts`).
+- `src/persistence/progress.ts` versioned, validated localStorage record. `src/audio/audio.ts` Web Audio cues (gesture-gated, failures swallowed).
+- `src/styles/` base / layout / board CSS. `e2e/` Playwright. `docs/qa/a1/` curated screenshots.
+
+## Rules you must not break
+- Rules live in docs/RULES.md; change engine + tests + docs together. Never let animation decide or advance rules.
+- Do not weaken tests to get green. Add a test for each defect fixed.
+- No runtime network, CDN fonts, analytics, eval, innerHTML. Saved strings are data only.
+- Never read, print or commit secrets/tokens/env dumps. The game must not use any API key.
+- No push, tag, deploy, public repo or global git config changes without the owner asking.
+- Defer: extra enemies, procedural generation, multiplayer, leaderboards, accounts, editor, translations, service worker, story. Do not present deferred things as working.
+
+## Commands
+`npm run dev` (127.0.0.1:5173/Trapline/), `npm run build`, `npm run preview` (4173), `npm run typecheck`, `npm test`, `npm run test:e2e` (builds + previews itself; browsers: `npx playwright install chromium`). Base path is `/Trapline/` (vite.config.ts, playwright.config.ts).
+
+## Practical notes
+- Write files as UTF-8 without BOM; do not round-trip source files through Windows PowerShell 5.1 `Get-Content` without `-Encoding UTF8` (it corrupted non-ASCII characters once).
+- Tests use `data-testid` hooks on visible controls and `data-at` / `data-open` readouts on board elements.
+- Mobile is Chromium emulation only; real-device testing is still open.

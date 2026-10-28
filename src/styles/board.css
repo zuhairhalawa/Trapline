@@ -1,0 +1,46 @@
+.board { display: block; overflow: visible; user-select: none; -webkit-user-select: none; touch-action: manipulation; }
+.board text { font-family: var(--font); }
+
+.actor { transition: transform 0.62s cubic-bezier(0.4, 0.1, 0.2, 1); }
+.hop { animation: hop 0.62s ease-out; }
+@keyframes hop { 0% { transform: translateY(0); } 40% { transform: translateY(-12px); } 100% { transform: translateY(0); } }
+.actor.is-captured .piece { filter: brightness(1.05); }
+
+.piece.ghost { opacity: 0.42; }
+.ghost-arrow .march { animation: march 1s linear infinite; }
+@keyframes march { to { stroke-dashoffset: -22; } }
+.wait-badge { opacity: 0.95; }
+.pill.preview { animation: pillbob 1.4s ease-in-out infinite; }
+@keyframes pillbob { 50% { transform: translateY(-3px); } }
+.pill { paint-order: stroke; }
+
+/* honeypot */
+.trap.armed .trap-ring { animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 50% { stroke-opacity: 0.35; } }
+.morsel { animation: bob 1.8s ease-in-out infinite; }
+@keyframes bob { 50% { transform: translateY(-4px); } }
+.trap-front .lid { transform-box: fill-box; transform-origin: 100% 100%; transition: transform 0.45s cubic-bezier(0.5, 0, 0.3, 1) 0.28s, opacity 0.3s ease 0.28s; }
+.trap-front:not(.closed) .lid { transform: translate(16px, -30px) rotate(-38deg); opacity: 0.4; }
+.trap-front.closed .lid { transform: none; opacity: 0.16; }
+.trap-front.closed { animation: snap 0.5s ease-out 0.3s; }
+@keyframes snap { 0% { transform: translateY(-6px); } 100% { transform: translateY(0); } }
+
+/* vault / dock */
+.vault.breached { animation: shake 0.5s ease-in-out 3; filter: drop-shadow(0 0 10px rgba(239, 112, 104, 0.9)); }
+@keyframes shake { 25% { transform: translate(-3px, -6px); } 75% { transform: translate(3px, -6px); } }
+.dock.delivered { filter: drop-shadow(0 0 8px rgba(104, 215, 188, 0.75)); }
+
+.gate .slats { transition: opacity 0.3s ease; }
+.lever { transition: all 0.3s ease; }
+
+/* interactive targets */
+.target { cursor: pointer; outline: none; }
+.target .ring { stroke: #f4ede2; stroke-dasharray: 5 7; opacity: 0.32; transition: opacity 0.15s ease; }
+.target:hover .ring { opacity: 0.8; }
+.target.selected .ring { opacity: 1; stroke-dasharray: none; stroke: #edb65a; }
+.target.unavailable { cursor: not-allowed; }
+.target:focus-visible .ring { opacity: 1; stroke: #68d7bc; stroke-dasharray: none; stroke-width: 5; }
+.target:focus-visible .hit { stroke: #68d7bc; stroke-width: 2; stroke-dasharray: 3 5; }
+
+.board.no-anim .actor, .board.no-anim .lid { transition-duration: 0s !important; transition-delay: 0s !important; }
+.board.no-anim * { animation: none !important; }
