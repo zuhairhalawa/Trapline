@@ -248,3 +248,9 @@
   .turn-row { gap: 6px; }
   .advance { min-height: 48px; }
 }
+
+/* Very narrow phones: wider system fonts (e.g. on Linux/Android) made the top bar wider than the viewport. */
+@media (max-width: 380px) {
+  .topbar { gap: 2px; }
+  .brand { font-size: 14px; letter-spacing: 0.04em; min-width: 0; flex: 0 1 auto; overflow: hidden; }
+}

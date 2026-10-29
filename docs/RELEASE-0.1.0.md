@@ -24,3 +24,6 @@ Full ancestry (3 commits, 142 tracked files) was scanned locally with pattern se
 
 ## Not verified
 Human playtest, real devices, Safari/Firefox, screen readers, audio by ear. GitHub CI and live-site results are recorded in the GitHub Release notes, not here, so that the tagged commit is the one that was verified.
+
+## Release fix found by CI
+The first GitHub Actions run (Ubuntu, Linux fonts) failed 4 existing e2e cases at 360x640: the top bar was wider than the viewport (scrollWidth 373 vs 360) because the system font stack renders wider than on Windows. Fix (CSS only, `src/styles/layout.css`): at `max-width: 380px` the brand gets tighter spacing and may shrink. No assertion was changed. Local full suite after the fix: 72 passed, 18 skipped, 0 failed (Windows); the authoritative check is the Linux CI run on the final commit.
