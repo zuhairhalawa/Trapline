@@ -27,3 +27,9 @@ Human playtest, real devices, Safari/Firefox, screen readers, audio by ear. GitH
 
 ## Release fix found by CI
 The first GitHub Actions run (Ubuntu, Linux fonts) failed 4 existing e2e cases at 360x640: the top bar was wider than the viewport (scrollWidth 373 vs 360) because the system font stack renders wider than on Windows. Fix (CSS only, `src/styles/layout.css`): at `max-width: 380px` the brand gets tighter spacing and may shrink. No assertion was changed. Local full suite after the fix: 72 passed, 18 skipped, 0 failed (Windows); the authoritative check is the Linux CI run on the final commit.
+
+## GitHub CI and live verification (2026-10-30)
+- Actions run on `41f0be7` (the CSS fix): Verify job passed (locked `npm ci`, typecheck, unit tests, build, `npm audit` 0 vulnerabilities, e2e **72 passed, 18 skipped, 0 failed** on Ubuntu/Node 24) and the Deploy job succeeded. The earlier run on `5a90b73` failed (see above) and deployed nothing.
+- Live URL https://zuhairhalawa.github.io/Trapline/ : HTTP 200; JS, CSS and title art served from `/Trapline/` paths with status 200; no console errors, no failed requests, no third-party requests.
+- Scripted smoke test through the visible controls, at 1440x900 and in 390x844 Chromium touch emulation (emulation is **not** real-device testing): Undo and Restart worked on Level 1; Levels 1, 2 and 3 were each won with the reference solutions; the finish button appeared; after a page reload the Continue button was offered, all three levels showed as done (state in `localStorage`), and there was no horizontal overflow. With the art files blocked, the title and game still worked. The title art rendered on both layouts.
+- The final commit that carries this documentation changes only documentation relative to `41f0be7`; its own CI run is recorded in the GitHub Release notes.

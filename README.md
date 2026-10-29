@@ -1,7 +1,7 @@
 # TRAPLINE
 
 > **Playable prototype (v0.1.0).** A three-level tactical puzzle for the browser.
-> **Live demo: https://zuhairhalawa.github.io/Trapline/** (status: *pending verification*, not confirmed live yet; see [docs/RELEASE-0.1.0.md](docs/RELEASE-0.1.0.md) for what has actually been checked).
+> **Live demo: https://zuhairhalawa.github.io/Trapline/** (deployed by GitHub Actions and smoke-tested on 2026-10-30 in Chromium desktop and emulated mobile only; details in [docs/RELEASE-0.1.0.md](docs/RELEASE-0.1.0.md)).
 
 Lure a digital intruder into a honeypot (a trap) while a legitimate data packet still reaches its destination. Plan one command per turn, preview what both pieces will do, press Advance, watch it play out. No security knowledge is needed; it is fictional entertainment on a miniature board.
 
