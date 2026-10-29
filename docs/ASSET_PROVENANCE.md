@@ -27,7 +27,7 @@ Both jobs: tool Higgsfield CLI 1.1.26, model display name **Nano Banana Pro** (j
 
 - Local derivative: `art/reference/trapline-design-sheet.jpg` (resized to 1920x1072, JPEG quality 85, no retouching).
 - Use: **design reference only. Not shipped, not in `public/`, not in `dist/`.** Its forms were used as visual cues for the hand-written SVG pieces (see `docs/ART_DIRECTION.md`). It was also uploaded once as the visual reference for Image 2 (allowed: a generated image from this pass).
-- Observation: the generated scout is a blocky coral robot with a dark visor and metal joints, noticeably different from the in-game faceted-kite SVG scout. The SVG scout only borrowed bevel, steel feet/bolt and visor cues. The trap, junction lever, courier envelope and vault plate cues were adopted more closely.
+- Observation: the generated scout is a blocky coral robot with a dark visor and metal joints, noticeably different from the in-game faceted-kite SVG scout. In A2 the SVG scout only borrowed bevel, steel feet/bolt and visor cues. In A2.1 the in-game scout was redrawn by hand as a restrained SVG interpretation of this robot (cube head-torso, dark visor, steel disc, jointed legs); no image data was copied, traced or auto-extracted. The trap, junction lever, courier envelope and vault plate cues were adopted more closely.
 
 ### Image 2: title illustration
 
@@ -56,6 +56,12 @@ Both jobs: tool Higgsfield CLI 1.1.26, model display name **Nano Banana Pro** (j
 | `art/reference/trapline-title-illustration.jpg` | 105330 | `F281E3E75D77859566404BA4ECC80A86238F7CB291A50725FD082FEA849E9F36` |
 
 Size targets: desktop hero <= 700 KB (64 KB), mobile <= 250 KB (33 KB). Both are well inside the limits; quality could be raised later if wanted.
+
+## Remaining gates (open, not assessed)
+
+- **Licensing / ownership:** the terms that apply to the two generated images have not been reviewed by the owner or anyone else, and no licence is applied to the artwork. Nothing in this repository should be read as clearing them.
+- **Public-release approval:** needed from the owner before any publication, deployment or release. None has happened.
+- The reference sheet is not shipped; the title illustration is. If licensing review fails, the title art can be removed without affecting gameplay (the vector fallback is tested).
 
 ## What is not recorded here
 

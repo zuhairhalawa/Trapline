@@ -1,4 +1,4 @@
-# Art direction (Stage A2)
+# Art direction (Stage A2, scout refined in A2.1)
 
 ## Direction: miniature security diorama
 
@@ -31,11 +31,11 @@ Colour is never the only signal: every actor/object has a distinct silhouette an
 | T-lever in a frosted housing on a steel plate | `JunctionPiece` |
 | Courier carries a sealed envelope, bolted side cap | courier glyph + steel cap |
 | Dark lock plate on the ivory vault | `Vault` face plate |
-| Steel feet and bolts on the scout | scout feet/bolts (the generated scout's boxy robot body was NOT copied) |
+| Coral robot scout: cube head-torso, wide dark visor on the left face, steel shoulder disc, short jointed legs, flat steel feet | A2.1 `Intruder` (pieces.tsx), hand-drawn from the reference, not traced or auto-extracted. A2 had only borrowed the feet/bolt cue |
 
 ## Pieces
 
-- **Intruder:** small angular scout, faceted kite body, two ears, narrow slanted visor with light bevel and steel feet. Visor tilts and glints amber when lured, flattens when blocked, X when trapped.
+- **Intruder (scout, A2.1):** a restrained SVG interpretation of the blocky coral robot in the title art: an upright cube head-torso (light top, lit left face, darker right face, the same bevel as the other blocks), a wide dark visor on the left face, a steel shoulder disc on the right face, two small hanging arms with steel hands, short legs with steel knee joints and flat steel feet. It replaces the A2 kite shape. Visor: level with an ivory glint when heading for the vault, tilted up with an amber glint when lured, a thin slit when blocked, an X when trapped. The head block carries `data-part="scout-head"` (tests use it instead of a polygon index). Silhouette: an upright block on legs, clearly unlike the floating mint rounded diamond. **Forecast copy:** the ghost scout is translucent (0.42), has no ground shadow and a dashed ivory outline around the head block, so it can never be mistaken for the real actor. The captured scout stays visible above the lid (head, X visor and shoulder discs are above the lid front; only the feet are hidden).
 - **Courier:** rounded diamond with an ivory envelope packet and steel cap; check when delivered.
 - **Vault:** tall ivory block with a dark lock plate on its face.
 - **Honeypot (one object, three states):** steel base plate, amber box body, hinge barrel on the back edge, side latch.
@@ -59,6 +59,7 @@ The committed state is always drawn. A queued command adds dashed amber/colored 
 ## Animation principles
 
 - Short (about 0.6 s) movement with a small hop. Cues: selection ring pop, lever swing (0.3 s), gate slat drop on closing, lid slam on capture, pill fade-in, marching dashes on queued routes.
+- **Capture sequencing (A2.1):** the committed state is final the instant Advance is pressed, but the capture / delivery / breach visuals (closed trap, TRAPPED, "sprung", DELIVERED glow, BREACH, X visor) wait about 0.62 s for the actors to arrive (`arrived` prop on `Board`, timer in `GameScreen`). In A2 they appeared within about 50 ms while the scout was still hundreds of pixels away. Undo, Restart and level changes cancel the timer; reduced motion shows the end state immediately.
 - Animation is decoration: rules resolve instantly in the engine and Advance is merely locked while it plays.
 - `prefers-reduced-motion` removes all animations/transitions and the Advance lock (checked by test for the new cues).
 - No bloom, no neon rain, no busy circuit textures.
@@ -78,5 +79,4 @@ See docs/ASSET_PROVENANCE.md for the generated images (prompts, model, job IDs, 
 ## Still open (not implemented)
 
 - Social/preview card image; per-level backdrop tint plates.
-- Redrawing the SVG scout closer to the generated boxy-visor robot (a deliberate non-goal this pass; decide after the owner reviews the look).
 - Any further generated art needs its own provenance entry first.

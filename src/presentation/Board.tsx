@@ -1,4 +1,4 @@
-import type { KeyboardEvent } from 'react';
+import { useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import type { Command, GameState, LevelDef, NodeDef, TurnResult } from '../engine';
 import { validateCommand } from '../engine';
 import { sameCommand } from '../ui/gameReducer';
@@ -26,7 +26,16 @@ export interface BoardProps {
   /** Horizontal compression used on narrow screens so pieces stay readable. */
   xScale?: number;
   animate?: boolean;
+  /**
+   * Presentation only. False while the pieces are still travelling after Advance: the capture / delivery / breach
+   * visuals (closed trap, TRAPPED, DELIVERED, BREACH, X visor) wait until the actors have arrived. The committed
+   * `state` (and every data-* readout) is never delayed; rules never depend on this.
+   */
+  arrived?: boolean;
 }
+
+/** Smallest rendered tap target (CSS px, diameter). The hit radius grows in board units when the board is drawn small. */
+const MIN_HIT_PX = 48;
 
 const diamond = (cx: number, cy: number, hw: number) =>
   `${cx - hw},${cy} ${cx},${cy + hw * K} ${cx + hw},${cy} ${cx},${cy - hw * K}`;
@@ -81,7 +90,17 @@ function WaitBadge({ x, y, color, s = 1 }: { x: number; y: number; color: string
   );
 }
 
-export function Board({ level, state, preview, selected, interactive, onCommand, xScale = 1, animate = true }: BoardProps) {
+export function Board({ level, state, preview, selected, interactive, onCommand, xScale = 1, animate = true, arrived = true }: BoardProps) {
+  // Rendered scale of the SVG (CSS px per board unit), measured from the real element so tap targets can keep a
+  // minimum CSS size however small the board is drawn (short landscape phones).
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const [scale, setScale] = useState(1);
+  const hitR = (r: number) => Math.max(r, MIN_HIT_PX / (2 * scale));
+  // Visuals of the committed result, held back until the pieces have arrived.
+  const vCaptured = state.intruder.captured && arrived;
+  const vBreached = state.intruder.breached && arrived;
+  const vDelivered = state.courier.delivered && arrived;
+
   const pos = (n: NodeDef): Pt => ({ x: n.x * xScale, y: n.y });
   /** Text/badge scale: pieces shrink on phones, so small annotations are enlarged to stay legible. */
   const f = xScale < 1 ? 1.5 : 1;
@@ -127,6 +146,23 @@ export function Board({ level, state, preview, selected, interactive, onCommand,
   const goalDy = goalIsVault ? -(100 + 28 * f) : -66;
   const maxY = Math.max(...all.map((p) => p.y)) + 118 + 10 * f;
   const vb = `${minX} ${minY} ${maxX - minX} ${maxY - minY}`;
+  const vbW = maxX - minX;
+  const vbH = maxY - minY;
+  useLayoutEffect(() => {
+    const el = svgRef.current;
+    if (!el) return;
+    const measure = () => {
+      const r = el.getBoundingClientRect();
+      if (r.width <= 0 || r.height <= 0) return;
+      const sc = Math.min(r.width / vbW, r.height / vbH);
+      setScale((prev) => (Math.abs(prev - sc) < 0.002 ? prev : sc));
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [vbW, vbH]);
 
   // ---- actors ----
   const stand = (n: NodeDef): Pt => {
@@ -156,7 +192,7 @@ export function Board({ level, state, preview, selected, interactive, onCommand,
   const iMoves = !!pv && iNext !== iAt;
   const cMoves = !!pv && cNext !== cAt;
 
-  const expression: Expression = state.intruder.captured
+  const expression: Expression = vCaptured
     ? 'captured'
     : pv?.intruder.reason === 'bait'
       ? 'bait'
@@ -171,7 +207,7 @@ export function Board({ level, state, preview, selected, interactive, onCommand,
   const targets: { key: string; at: Pt; r: number; command: Command; label: string }[] = [];
   for (const t of level.honeypots) {
     const c: Command = { kind: 'bait', target: t };
-    targets.push({ key: `bait-${t}`, at: { x: P(t).x, y: P(t).y - 14 }, r: 54, command: c, label: `Trap at ${nodeLabel(level, t)}` });
+    targets.push({ key: `bait-${t}`, at: { x: P(t).x, y: P(t).y - 14 }, r: hitR(54), command: c, label: `Trap at ${nodeLabel(level, t)}` });
   }
   const unit = (from: Pt, to: Pt): Pt => {
     const dx = to.x - from.x;
@@ -190,13 +226,13 @@ export function Board({ level, state, preview, selected, interactive, onCommand,
     const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy || 1)));
     return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
   };
-  const JR = 42;
+  const JR = hitR(42);
   const others = [
     ...targets.map((t) => ({ at: t.at, r: t.r })),
     ...level.shutters.map((sh) => {
       const a = P(sh.edge[0]);
       const b = P(sh.edge[1]);
-      return { at: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 - 12 }, r: 42 };
+      return { at: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 - 12 }, r: hitR(42) };
     }),
   ];
   const placeJunction = (hub: Pt): Pt => {
@@ -231,7 +267,7 @@ export function Board({ level, state, preview, selected, interactive, onCommand,
       altTo: nodeLabel(level, sw.options[cur === 0 ? 1 : 0].find((x) => x !== sw.hub) as string),
     };
   });
-  for (const d of junctions) targets.push({ key: `rr-${d.sw.id}`, at: { x: d.at.x, y: d.at.y - 8 }, r: 42, command: { kind: 'reroute', id: d.sw.id }, label: `Junction at ${nodeLabel(level, d.sw.hub)}, now to ${d.curTo}, queues switch to ${d.altTo}` });
+  for (const d of junctions) targets.push({ key: `rr-${d.sw.id}`, at: { x: d.at.x, y: d.at.y - 8 }, r: JR, command: { kind: 'reroute', id: d.sw.id }, label: `Junction at ${nodeLabel(level, d.sw.hub)}, now to ${d.curTo}, queues switch to ${d.altTo}` });
   const gates = level.shutters.map((sh) => {
     const a = P(sh.edge[0]);
     const b = P(sh.edge[1]);
@@ -240,7 +276,7 @@ export function Board({ level, state, preview, selected, interactive, onCommand,
     const l = Math.hypot(dx, dy) || 1;
     return { sh, at: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, u: { x: dx / l, y: dy / l }, open: state.shutters[sh.id] ?? sh.initiallyOpen };
   });
-  for (const g of gates) targets.push({ key: `sh-${g.sh.id}`, at: { x: g.at.x, y: g.at.y - 12 }, r: 42, command: { kind: 'shutter', id: g.sh.id }, label: `Gate ${nodeLabel(level, g.sh.edge[0])} to ${nodeLabel(level, g.sh.edge[1])}` });
+  for (const g of gates) targets.push({ key: `sh-${g.sh.id}`, at: { x: g.at.x, y: g.at.y - 12 }, r: hitR(42), command: { kind: 'shutter', id: g.sh.id }, label: `Gate ${nodeLabel(level, g.sh.edge[0])} to ${nodeLabel(level, g.sh.edge[1])}` });
 
   const onKey = (e: KeyboardEvent, c: Command) => {
     if (e.key === 'Enter' || e.key === ' ') {
@@ -257,6 +293,7 @@ export function Board({ level, state, preview, selected, interactive, onCommand,
 
   return (
     <svg
+      ref={svgRef}
       className={`board ${animate ? '' : 'no-anim'}`}
       viewBox={vb}
       preserveAspectRatio="xMidYMid meet"
@@ -335,7 +372,7 @@ export function Board({ level, state, preview, selected, interactive, onCommand,
       {nodesSorted.map((n) => {
         const p = pos(n);
         const isArmed = state.armed === n.id;
-        const closed = n.kind === 'trap' && state.intruder.captured && state.intruder.at === n.id;
+        const closed = n.kind === 'trap' && vCaptured && state.intruder.at === n.id;
         return (
           <g key={n.id} transform={`translate(${p.x} ${p.y})`} data-node={n.id} className={`node node-${n.kind}`}>
             <Tile tint={n.kind === 'trap' ? '#5a4a34' : undefined} />
@@ -343,8 +380,8 @@ export function Board({ level, state, preview, selected, interactive, onCommand,
             {(n.kind === 'relay' || n.kind === 'side') && <ServerBox />}
             {n.kind === 'source' && <ServerBox led={PAL.mint} />}
             {n.kind === 'dead' && <DeadEnd />}
-            {n.kind === 'vault' && <Vault breached={state.intruder.breached} />}
-            {n.kind === 'drop' && <DropDock delivered={state.courier.delivered} />}
+            {n.kind === 'vault' && <Vault breached={vBreached} />}
+            {n.kind === 'drop' && <DropDock delivered={vDelivered} />}
             {n.kind === 'trap' && <g transform="scale(1.2)"><TrapBack armed={isArmed} closed={closed} /></g>}
             {n.kind === 'trap' && qBait === n.id && <ellipse className="queued-ring" cx="0" cy="2" rx="52" ry="30" fill="none" stroke={PAL.amber} strokeWidth="3.5" strokeDasharray="8 6" />}
           </g>
@@ -367,7 +404,7 @@ export function Board({ level, state, preview, selected, interactive, onCommand,
       <g aria-hidden="true" className="labels">
         {level.nodes.map((n) => {
           const p = pos(n);
-          const sprung = n.kind === 'trap' && state.intruder.captured && state.intruder.at === n.id;
+          const sprung = n.kind === 'trap' && vCaptured && state.intruder.at === n.id;
           const text = sprung ? `${n.label} · sprung` : n.kind === 'trap' && state.armed === n.id ? `${n.label} · armed` : n.label;
           const w = text.length * 7 + 18;
           return (
@@ -420,7 +457,7 @@ export function Board({ level, state, preview, selected, interactive, onCommand,
           who === 'i' ? (
             <g
               key="i"
-              className={`actor intruder ${state.intruder.captured ? 'is-captured' : ''}`}
+              className={`actor intruder ${vCaptured ? 'is-captured' : ''}`}
               style={{ transform: `translate(${iPt.x}px, ${iPt.y}px)` }}
               data-testid="intruder"
               data-at={iAt}
@@ -441,7 +478,7 @@ export function Board({ level, state, preview, selected, interactive, onCommand,
               data-delivered={state.courier.delivered}
             >
               <g key={hop} className="hop">
-                <Courier delivered={state.courier.delivered} />
+                <Courier delivered={vDelivered} />
               </g>
             </g>
           ),
@@ -455,7 +492,7 @@ export function Board({ level, state, preview, selected, interactive, onCommand,
       <g aria-hidden="true">
         {trapNodes.map((n) => {
           const p = pos(n);
-          const closed = state.intruder.captured && state.intruder.at === n.id;
+          const closed = vCaptured && state.intruder.at === n.id;
           return (
             <g key={n.id} transform={`translate(${p.x} ${p.y})`}>
               <g transform="scale(1.2)"><TrapFront armed={state.armed === n.id} closed={closed} /></g>
@@ -466,9 +503,9 @@ export function Board({ level, state, preview, selected, interactive, onCommand,
 
       {/* status pills */}
       <g aria-hidden="true">
-        {state.intruder.captured && <Pill x={P(state.intruder.at).x} y={P(state.intruder.at).y - 84} text="TRAPPED" tone="amber" s={f} />}
-        {state.intruder.breached && <Pill x={P(level.vault).x} y={P(level.vault).y - 96} text="BREACH" tone="coral" s={f} />}
-        {state.courier.delivered && <Pill x={P(level.courierGoal).x} y={P(level.courierGoal).y + goalDy} text="DELIVERED" tone="mint" s={f} />}
+        {vCaptured && <Pill x={P(state.intruder.at).x} y={P(state.intruder.at).y - 84} text="TRAPPED" tone="amber" s={f} />}
+        {vBreached && <Pill x={P(level.vault).x} y={P(level.vault).y - 96} text="BREACH" tone="coral" s={f} />}
+        {vDelivered && <Pill x={P(level.courierGoal).x} y={P(level.courierGoal).y + goalDy} text="DELIVERED" tone="mint" s={f} />}
         {pv && previewCaptured && !state.intruder.captured && <Pill x={P(iNext).x} y={P(iNext).y - 84} text="TRAP CLOSES" tone="amber" preview s={f} />}
         {pv && previewBreach && <Pill x={P(level.vault).x} y={P(level.vault).y - 96} text="BREACH" tone="coral" preview s={f} />}
         {pv && previewDelivered && !state.courier.delivered && <Pill x={P(level.courierGoal).x} y={P(level.courierGoal).y + goalDy} text="DELIVERS" tone="mint" preview s={f} />}

@@ -1,4 +1,15 @@
-# HANDOVER - Stage A2 (unreleased, local only)
+# HANDOVER - Stage A2.1 (complete locally, unreleased, local only)
+
+Branch `repair/a2-1-20261029-130136` from A2 tip `e40cb10e1b90a970b874e63ee0bf7e9ffa5d3b50` (`main` and the A2 branch untouched). Nothing pushed/tagged/deployed.
+
+State: typecheck, 67 unit, build, and the full browser suite (72 passed, 18 explained skips, 0 failed) pass on the final tree. Details and the unverified list: docs/QA-A2-1.md.
+
+Done: state/queued-action-aware Level 1 coach (`coachLine`); grid layout with a non-overlay dock holding a compact decision summary; board tap targets scale to stay >= 44 px (Level 2 junction fixed at 844x390); blocky SVG scout (`data-part="scout-head"`); capture/delivery/breach visuals wait for actor arrival (`arrived` prop + MOVE_MS timer; engine result stays synchronous). Tests: `e2e/a2-1.spec.ts`, `src/presentation/text.test.ts`. Captures: `docs/qa/a2-1/`.
+
+Next: owner look-and-feel review and human playtest (real devices, other browsers); licensing/release approval of the generated title art (open, not assessed); only then new levels. Known rough edges: see "Observed minor issues" in docs/QA-A2-1.md.
+---
+
+# Previous handover - Stage A2
 
 Branch: `polish/a2-higgsfield-20261029-032643` (from reviewed A1 baseline `3169fa4c51d720cdc41e1f82d3bc97c9cf54422e`; A1 is untouched on `main`). Nothing is pushed, tagged or deployed; no remote exists.
 

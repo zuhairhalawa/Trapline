@@ -7,7 +7,11 @@ import {
 
 const BOTH = ['follow-the-bait', 'open-the-wrong-door'];
 
-/** True when the topmost element at the centre of `l` is `l` or one of its descendants. */
+/**
+ * True when the topmost element at the centre of `l` is `l` or one of its descendants.
+ * NOTE: this helper SCROLLS the element into view first, so it only proves reachability after scrolling. First-view visibility
+ * (nothing scrolled) is asserted separately in a2-1.spec.ts.
+ */
 async function isTopmostAtCentre(_page: Page, l: Locator): Promise<boolean> {
   await l.scrollIntoViewIfNeeded();
   const b = await l.boundingBox();
@@ -20,25 +24,32 @@ const trayRect = (page: Page) => page.getByTestId('tray').evaluate((e) => {
   return { top: r.top, bottom: r.bottom, left: r.left, right: r.right };
 });
 
-/** Scroll every scroll container (page and desktop side panel) to its end. */
+/** Scroll every scroll container (page, phone scroll region and wide-screen details panel) to its end. */
 async function scrollToEnd(page: Page) {
   await page.evaluate(() => {
     window.scrollTo(0, document.documentElement.scrollHeight);
+    const sc = document.querySelector('.scroller');
+    if (sc) sc.scrollTop = sc.scrollHeight;
     const p = document.querySelector('.panel');
     if (p) p.scrollTop = p.scrollHeight;
   });
   await page.waitForTimeout(80);
 }
 
-/** Lowest bottom edge of any non-tray panel content, and the tray top: content must end above the tray. */
+/**
+ * Lowest bottom edge of any scrolling content (details panel children, plus the board on phones where the board scrolls
+ * with the details), and the tray top: content must end above the tray. The tray is its own grid row (A2.1), not a child of .panel.
+ */
 async function contentVsTray(page: Page) {
   return page.evaluate(() => {
     const panel = document.querySelector('.panel') as HTMLElement;
+    const scroller = document.querySelector('.scroller') as HTMLElement;
     const tray = document.querySelector('[data-testid=tray]') as HTMLElement;
     const t = tray.getBoundingClientRect();
+    const items: Element[] = Array.from(panel.children);
+    if (getComputedStyle(scroller).display !== 'contents') items.push(document.querySelector('.board-wrap') as Element);
     let bottom = -Infinity;
-    for (const c of Array.from(panel.children)) {
-      if (c === tray) continue;
+    for (const c of items) {
       const r = c.getBoundingClientRect();
       if (r.height > 0) bottom = Math.max(bottom, r.bottom);
     }
@@ -48,7 +59,7 @@ async function contentVsTray(page: Page) {
 
 const shot = async (page: Page, name: string, info: TestInfo) => {
   // captures are taken scrolled to the top, the way a player first sees the screen
-  await page.evaluate(() => { window.scrollTo(0, 0); document.querySelector('.panel')?.scrollTo(0, 0); });
+  await page.evaluate(() => { window.scrollTo(0, 0); document.querySelector('.panel')?.scrollTo(0, 0); document.querySelector('.scroller')?.scrollTo(0, 0); });
   await page.waitForTimeout(120);
   await page.screenshot({ path: `${QA_DIR}/${name}-${info.project.name}.png` });
 };
@@ -200,7 +211,7 @@ test('trap: idle, armed and sprung are different drawings and the captured scout
   await expect(page.locator('.trap-front .lid-front')).toHaveCount(1);
   // the scout's head is not covered by trap art
   await page.waitForTimeout(700);
-  const head = page.getByTestId('intruder').locator('polygon').nth(2);
+  const head = page.getByTestId('intruder').locator('[data-part="scout-head"]');
   const b = await head.boundingBox();
   expect(b).not.toBeNull();
   const covered = await page.evaluate((p) => {

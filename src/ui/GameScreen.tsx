@@ -1,17 +1,21 @@
-import { useEffect, useMemo, useReducer, useRef } from 'react';
+import { useEffect, useMemo, useReducer, useState } from 'react';
 import type { Command, LevelDef } from '../engine';
 import { resolveTurn, validateCommand } from '../engine';
 import { LEVELS } from '../levels/levels';
 import { Board } from '../presentation/Board';
 import {
-  courierLine, describeCommand, intruderLine, outcomeLine, turnAnnouncement,
+  coachLine, courierLine, describeCommand, intruderLine, outcomeLine, outcomeTag, queuedPhrase, shortCourier, shortIntruder, turnAnnouncement,
 } from '../presentation/text';
 import { isUnlocked, type Progress } from '../persistence/progress';
 import type { Cue } from '../audio/audio';
 import { newSession, reducer, sameCommand } from './gameReducer';
 import { useNarrow, useReducedMotion } from './hooks';
 
+/** Actor travel is 0.62 s (board.css). Capture / delivery / breach visuals wait for it; rules never do. */
+const MOVE_MS = 620;
+/** Advance stays locked while the move plays; a level-ending turn also leaves time for the trap slam / vault shake. */
 const ANIM_MS = 760;
+const ANIM_END_MS = 1150;
 
 interface Props {
   level: LevelDef;
@@ -34,6 +38,7 @@ function commandsFor(level: LevelDef): Command[] {
   if (level.allowed.includes('shutter')) for (const s of level.shutters) out.push({ kind: 'shutter', id: s.id });
   return out;
 }
+const NBSP = ' ';
 const KEYS: Record<Command['kind'], string> = { bait: 'B', reroute: 'R', shutter: 'S' };
 
 export function GameScreen(p: Props) {
@@ -51,12 +56,25 @@ export function GameScreen(p: Props) {
   );
 
   // Animation lock only; it never changes rules. Cleared by undo/restart via animSeq.
+  const endsLevel = !!lastTurn && lastTurn.state.status !== 'playing';
   useEffect(() => {
     if (!busy) return;
     const seq = session.animSeq;
-    const id = window.setTimeout(() => dispatch({ type: 'animationDone', seq }), ANIM_MS);
+    const id = window.setTimeout(() => dispatch({ type: 'animationDone', seq }), endsLevel ? ANIM_END_MS : ANIM_MS);
+    return () => window.clearTimeout(id);
+  }, [busy, session.animSeq, endsLevel]);
+
+  // Presentation only: the capture / delivery / breach visuals wait until the pieces have arrived. The committed state
+  // (and the win/loss result) is already final; undo/restart (busy -> false) or reduced motion show it immediately,
+  // and a stale timer from an undone turn is cancelled by the effect cleanup.
+  const [arrivedSeq, setArrivedSeq] = useState(-1);
+  useEffect(() => {
+    if (!busy) return;
+    const seq = session.animSeq;
+    const id = window.setTimeout(() => setArrivedSeq(seq), MOVE_MS);
     return () => window.clearTimeout(id);
   }, [busy, session.animSeq]);
+  const arrived = !busy || arrivedSeq === session.animSeq;
 
   // Sound + progress follow committed results. Timers are cancelled if the turn is undone/restarted.
   useEffect(() => {
@@ -65,9 +83,9 @@ export function GameScreen(p: Props) {
     const later = (c: Cue, ms: number) => ids.push(window.setTimeout(() => p.cue(c), ms));
     p.cue('move');
     const t = lastTurn.events;
-    if (t.some((e) => e.type === 'captured')) later('capture', 420);
-    if (t.some((e) => e.type === 'victory')) later('success', 900);
-    if (t.some((e) => e.type === 'breach' || e.type === 'timeout')) later('failure', 650);
+    if (t.some((e) => e.type === 'captured')) later('capture', MOVE_MS + 20); // when the trap visibly closes
+    if (t.some((e) => e.type === 'victory')) later('success', MOVE_MS + 420);
+    if (t.some((e) => e.type === 'breach' || e.type === 'timeout')) later('failure', MOVE_MS + 30);
     if (lastTurn.state.status === 'won') {
       p.onWin(level.id, lastTurn.state.turn, level.budget - lastTurn.state.charges);
     }
@@ -116,12 +134,6 @@ export function GameScreen(p: Props) {
   const status = current.status;
   const over = !playing && !busy;
   const nextIndex = p.index + 1 < LEVELS.length ? p.index + 1 : -1;
-  const resultRef = useRef<HTMLElement | null>(null);
-  // Bring the outcome into view (scroll-padding keeps it clear of the pinned tray).
-  useEffect(() => {
-    if (over) resultRef.current?.scrollIntoView({ block: 'nearest', behavior: reduced ? 'auto' : 'smooth' });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [over]);
 
   const announce = selected && preview
     ? `Queued ${info.name}. ${intruderLine(level, preview, preview.state.armed)}`
@@ -129,13 +141,9 @@ export function GameScreen(p: Props) {
       ? turnAnnouncement(level, lastTurn)
       : notice ?? `Level ${level.number}. Turn ${current.turn} of ${level.turnLimit}. ${current.charges} commands left.`;
 
-  // Level 1 doubles as the interactive introduction.
-  let coach: string | null = null;
-  if (level.number === 1 && playing && !busy) {
-    if (current.turn === 0 && !selected) coach = '1. Select Bait. It arms the trap on the right.';
-    else if (current.turn === 0) coach = '2. The dashed arrows show the next move for both pieces. Press Advance.';
-    else coach = '3. The intruder is next to the trap. Nothing more to arm: Wait, then Advance.';
-  }
+  // Level 1 doubles as the interactive introduction. Advice follows the current state and the queued action only.
+  const coach = coachLine(level, current, selected, preview);
+  const tag = preview ? (notice ? { tone: 'note' as const, text: notice } : outcomeTag(preview)) : notice ? { tone: 'note' as const, text: notice } : null;
 
   const trapped = current.intruder.captured;
   const delivered = current.courier.delivered;
@@ -189,65 +197,69 @@ export function GameScreen(p: Props) {
       </header>
 
       <main className="stage">
-        <section className="board-wrap" aria-label="Board">
-          <Board
-            level={level}
-            state={current}
-            preview={preview}
-            selected={selected}
-            interactive={playing}
-            onCommand={(c) => select(c)}
-            xScale={narrow ? 0.62 : 1}
-            animate={!reduced}
-          />
-          <p className="legend" aria-hidden="true">
-            <span className="lg coral">Intruder</span>
-            <span className="lg mint">Courier</span>
-            <span className="lg dash">Dashed arrows: next turn</span>
-            <span className="lg queue">Dashed amber: queued change</span>
-          </p>
-        </section>
+        {/* Scroll region: board + details. On phones it is the only thing that scrolls; the dock below never overlays it. */}
+        <div className="scroller" data-testid="scroller">
+          <section className="board-wrap" aria-label="Board">
+            <Board
+              level={level}
+              state={current}
+              preview={preview}
+              selected={selected}
+              interactive={playing}
+              onCommand={(c) => select(c)}
+              xScale={narrow ? 0.62 : 1}
+              animate={!reduced}
+              arrived={arrived}
+            />
+            <p className="legend" aria-hidden="true">
+              <span className="lg coral">Intruder</span>
+              <span className="lg mint">Courier</span>
+              <span className="lg dash">Dashed arrows: next turn</span>
+              <span className="lg queue">Dashed amber: queued change</span>
+            </p>
+          </section>
 
-        <aside className="panel" aria-label="Mission">
-          <div className="panel-top">
-            <p className="eyebrow">Level {level.number} of {LEVELS.length}</p>
-            <h2>{level.title}</h2>
-            <p className="brief">{level.briefing}</p>
-            <ul className="objective" aria-label="Objective">
-              <li className={trapped ? 'done' : ''} data-testid="obj-trap"><span className="check" aria-hidden="true">{trapped ? '✓' : ''}</span>Trap the intruder.</li>
-              <li className={delivered ? 'done' : ''} data-testid="obj-deliver"><span className="check" aria-hidden="true">{delivered ? '✓' : ''}</span>Deliver the packet.</li>
-            </ul>
-            <div className="stats">
-              <p><span>Turn</span><b data-testid="turn">{current.turn} / {level.turnLimit}</b></p>
-              <p><span>Commands</span><b data-testid="charges">{current.charges}</b></p>
+          <aside className="panel" aria-label="Mission">
+            <div className="panel-top">
+              <p className="eyebrow">Level {level.number} of {LEVELS.length}</p>
+              <h2>{level.title}</h2>
+              <p className="brief">{level.briefing}</p>
+              <ul className="objective" aria-label="Objective">
+                <li className={trapped ? 'done' : ''} data-testid="obj-trap"><span className="check" aria-hidden="true">{trapped ? '✓' : ''}</span>Trap the intruder.</li>
+                <li className={delivered ? 'done' : ''} data-testid="obj-deliver"><span className="check" aria-hidden="true">{delivered ? '✓' : ''}</span>Deliver the packet.</li>
+              </ul>
+              <div className="stats">
+                <p><span>Turn</span><b data-testid="turn">{current.turn} / {level.turnLimit}</b></p>
+                <p><span>Commands</span><b data-testid="charges">{current.charges}</b></p>
+              </div>
             </div>
-          </div>
 
-          {coach && <p className="coach" data-testid="coach">{coach}</p>}
+            {playing && (
+              <>
+                <section className="intel" aria-label="Next turn preview" data-testid="intel">
+                  <h3>{busy ? 'Moving…' : 'Next turn'}</h3>
+                  {preview && (
+                    <>
+                      <p className="line coral" data-testid="intruder-line">{intruderLine(level, preview, preview.state.armed)}</p>
+                      <p className="line mint" data-testid="courier-line">{courierLine(level, preview)}</p>
+                      {outcomeLine(preview) && <p className="outcome" data-testid="outcome">{outcomeLine(preview)}</p>}
+                    </>
+                  )}
+                </section>
+                <section className="explain" aria-label="Selected action">
+                  <h3 data-testid="selected-name">{info.name}{selected ? ' queued' : ''}</h3>
+                  <p>{info.explain}</p>
+                </section>
+                {!coach && <p className="tip">{level.tip}</p>}
+              </>
+            )}
+          </aside>
+        </div>
 
-          {playing && (
-            <>
-              <section className="explain" aria-label="Selected action">
-                <h3 data-testid="selected-name">{info.name}{selected ? ' queued' : ''}</h3>
-                <p>{info.explain}</p>
-                {notice && <p className="notice" role="alert">{notice}</p>}
-              </section>
-              <section className="intel" aria-label="Next turn preview" data-testid="intel">
-                <h3>{busy ? 'Moving…' : 'Next turn'}</h3>
-                {preview && (
-                  <>
-                    <p className="line coral" data-testid="intruder-line">{intruderLine(level, preview, preview.state.armed)}</p>
-                    <p className="line mint" data-testid="courier-line">{courierLine(level, preview)}</p>
-                    {outcomeLine(preview) && <p className="outcome" data-testid="outcome">{outcomeLine(preview)}</p>}
-                  </>
-                )}
-              </section>
-              {!coach && <p className="tip">{level.tip}</p>}
-            </>
-          )}
-
+        {/* Dock: its own grid row (never overlaid on content). Commands, the compact decision summary, Undo/Restart/Advance. */}
+        <div className={`dock ${over ? 'over' : ''}`} role="group" aria-label="Commands" data-testid="tray">
           {over && status === 'won' && (
-            <section className="result win" aria-label="Result" data-testid="result" data-status="won" ref={resultRef}>
+            <section className="result win" aria-label="Result" data-testid="result" data-status="won">
               <h3>Trap sprung. Packet delivered.</h3>
               <p>Level complete in {current.turn} {current.turn === 1 ? 'turn' : 'turns'}, using {level.budget - current.charges} of {level.budget} commands.</p>
               <div className="result-actions">
@@ -262,21 +274,21 @@ export function GameScreen(p: Props) {
             </section>
           )}
           {over && status === 'lost' && (
-            <section className="result loss" aria-label="Result" data-testid="result" data-status="lost" ref={resultRef}>
+            <section className="result loss" aria-label="Result" data-testid="result" data-status="lost">
               <h3>{current.lossReason === 'breach' ? 'Breach' : 'Out of turns'}</h3>
               <p>{lossText}</p>
               <p className="fine">Undo the last turn or restart to try another plan.</p>
             </section>
           )}
 
-          <div className={`actions ${over ? 'over' : ''}`} role="group" aria-label="Commands" data-testid="tray">
+          {!over && (
             <div className="cmd-row">
               {cmds.map((c) => {
                 const ci = describeCommand(level, current, c);
                 const err = validateCommand(level, current, c);
                 const sub = current.charges <= 0 && playing ? 'No charges' : ci.sub;
                 const on = sameCommand(selected, c);
-                const id = c.kind === 'bait' ? `cmd-bait` : c.kind === 'reroute' ? 'cmd-reroute' : 'cmd-shutter';
+                const id = c.kind === 'bait' ? 'cmd-bait' : c.kind === 'reroute' ? 'cmd-reroute' : 'cmd-shutter';
                 return (
                   <button key={`${c.kind}`} className="cmd" aria-pressed={on} disabled={err !== null || busy}
                     data-testid={id} onClick={() => select(c)}>
@@ -292,16 +304,32 @@ export function GameScreen(p: Props) {
                 <kbd aria-hidden="true">W</kbd>
               </button>
             </div>
-            <div className="turn-row">
-              <button className="btn ghost" data-testid="undo" onClick={undo} disabled={history.length === 0}>Undo</button>
-              <button className="btn ghost" data-testid="restart" onClick={restart}>Restart</button>
-              <button className="btn primary advance" data-testid="advance" onClick={advance} disabled={!playing || busy}>
-                Advance
-              </button>
-            </div>
-            <p className="keys" aria-hidden="true">Keys: B R S W pick · A advance · U undo · Shift+R restart</p>
+          )}
+
+          {playing && (
+            <section className="decision" aria-label="Queued action and next turn" data-testid="decision">
+              {coach && <p className="coach" data-testid="coach">{coach}</p>}
+              <p className="d-action" data-testid="decision-action">
+                <span className="d-label">{busy ? 'Moving' : 'Queued'}</span>
+                {busy ? '…' : queuedPhrase(level, current, selected)}
+              </p>
+              <p className="d-forecast" data-testid="decision-forecast">
+                <span className="d-i" data-testid="decision-intruder">{preview ? shortIntruder(level, preview) : NBSP}</span>
+                <span className="d-c" data-testid="decision-courier">{preview ? shortCourier(level, preview) : NBSP}</span>
+              </p>
+              <p className={`d-tag ${tag ? `tone-${tag.tone}` : ''}`} data-testid="decision-outcome" role={notice ? 'alert' : undefined}>{tag ? tag.text : NBSP}</p>
+            </section>
+          )}
+
+          <div className="turn-row">
+            <button className="btn ghost" data-testid="undo" onClick={undo} disabled={history.length === 0}>Undo</button>
+            <button className="btn ghost" data-testid="restart" onClick={restart}>Restart</button>
+            <button className="btn primary advance" data-testid="advance" onClick={advance} disabled={!playing || busy}>
+              Advance
+            </button>
           </div>
-        </aside>
+          <p className="keys" aria-hidden="true">Keys: B R S W pick · A advance · U undo · Shift+R restart</p>
+        </div>
       </main>
 
       <div className="sr-only" role="status" aria-live="polite" data-testid="live">{announce}</div>

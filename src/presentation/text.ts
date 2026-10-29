@@ -110,3 +110,77 @@ export function turnAnnouncement(level: LevelDef, r: TurnResult): string {
   }
   return parts.join(' ');
 }
+/**
+ * Level 1 coaching. It depends on the CURRENT state and on what is queued right now, never on the turn number alone.
+ * It is advice only: no command is ever blocked or forced, and it is separate from the engine rules.
+ * Returns null on other levels or when the level is over.
+ */
+export function coachLine(level: LevelDef, state: GameState, selected: Command | null, preview: TurnResult | null): string | null {
+  if (level.number !== 1 || state.status !== 'playing') return null;
+  // Trap armed: the only thing left is to let the turn happen. Wait is the default (nothing queued).
+  if (state.armed !== null) return 'Trap armed. Keep Wait and press Advance.';
+  if (selected?.kind === 'bait') {
+    return state.turn === 0 ? 'Press Advance. Dashed arrows: next move.' : 'Bait queued. Press Advance.';
+  }
+  if (state.turn === 0) return 'Select Bait to arm the trap.';
+  if (state.charges <= 0) return 'No commands left. Press Advance.';
+  const breach = !!preview && preview.ok && preview.events.some((e) => e.type === 'breach');
+  return breach ? 'Wait would lose. Select Bait instead.' : 'Select Bait, then press Advance.';
+}
+
+/** Short phrase for what is queued (shown in the compact decision summary). */
+export function queuedPhrase(level: LevelDef, state: GameState, c: Command | null): string {
+  if (c === null) return 'Wait (no command)';
+  switch (c.kind) {
+    case 'bait':
+      return `Bait: ${nodeLabel(level, c.target)}`;
+    case 'reroute': {
+      const sw = level.switches.find((s) => s.id === c.id);
+      if (!sw) return 'Reroute';
+      const cur = state.switches[c.id] ?? sw.initial;
+      const other = sw.options[cur === 0 ? 1 : 0];
+      const to = other[0] === sw.hub ? other[1] : other[0];
+      return `Reroute: open ${nodeLabel(level, to)}`;
+    }
+    case 'shutter': {
+      const sh = level.shutters.find((s) => s.id === c.id);
+      if (!sh) return 'Gate';
+      const open = state.shutters[c.id] ?? sh.initiallyOpen;
+      return `${open ? 'Seal' : 'Open'} gate: ${nodeLabel(level, sh.edge[0])} - ${nodeLabel(level, sh.edge[1])}`;
+    }
+  }
+}
+
+/** One short line per actor for the compact summary. */
+export function shortIntruder(level: LevelDef, r: TurnResult): string {
+  const i = r.intruder;
+  if (i.reason === 'captured') return 'Intruder trapped';
+  if (i.reason === 'breached') return 'Intruder in vault';
+  if (i.reason === 'no-route' || i.from === i.to) return 'Intruder waits';
+  return `Intruder to ${nodeLabel(level, i.to)}${i.reason === 'bait' ? ' (bait)' : ''}`;
+}
+export function shortCourier(level: LevelDef, r: TurnResult): string {
+  const c = r.courier;
+  if (c.reason === 'delivered') return 'Packet delivered';
+  if (c.reason === 'blocked' || c.from === c.to) return 'Courier waits';
+  return `Courier to ${nodeLabel(level, c.to)}`;
+}
+
+export interface OutcomeTag {
+  readonly tone: 'loss' | 'win' | 'note';
+  readonly text: string;
+}
+/** Compact outcome tag for the summary (null when nothing notable happens next turn). */
+export function outcomeTag(r: TurnResult): OutcomeTag | null {
+  if (!r.ok) return { tone: 'note', text: r.error ?? 'Not possible' };
+  const ev = r.events;
+  if (ev.some((e) => e.type === 'breach')) return { tone: 'loss', text: 'Breach: you lose' };
+  if (ev.some((e) => e.type === 'victory')) return { tone: 'win', text: 'Trap closes: you win' };
+  if (ev.some((e) => e.type === 'timeout')) return { tone: 'loss', text: 'Out of turns: you lose' };
+  const c = ev.some((e) => e.type === 'captured');
+  const d = ev.some((e) => e.type === 'delivered');
+  if (c && d) return { tone: 'note', text: 'Trap closes, packet delivered' };
+  if (c) return { tone: 'note', text: 'Trap closes' };
+  if (d) return { tone: 'note', text: 'Packet delivered' };
+  return null;
+}

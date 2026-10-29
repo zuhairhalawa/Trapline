@@ -27,8 +27,9 @@ export function About({ onClose }: { onClose: () => void }) {
           miniature board; nothing here touches a real network, account or file, and it teaches no real attack technique.
         </p>
         <p>
-          This is an unreleased playable slice (Stage A1) with three levels. Progress and the sound setting are kept only in this
-          browser's local storage. There is no account, analytics, advertising or network save.
+          This is an unreleased playable slice (Stage A2.1) with three levels. Progress and the sound setting are kept only in this
+          browser's local storage. There is no account, analytics, advertising or network save. The title-screen picture is
+          generated concept art, not gameplay; its licence and public-release approval are still to be decided.
         </p>
         <button ref={closeRef} className="btn primary" onClick={onClose}>Close</button>
       </div>

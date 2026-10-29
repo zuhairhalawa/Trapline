@@ -257,33 +257,70 @@ export function TrapFront({ armed, closed }: { armed: boolean; closed: boolean }
 
 export type Expression = 'vault' | 'bait' | 'blocked' | 'captured';
 
+/**
+ * Scout: the playable version of the coral robot in the title art (art/reference/trapline-design-sheet.jpg):
+ * a cube head-torso with a wide dark visor on its left face, steel shoulder discs, short jointed legs and flat steel
+ * feet, in the same coral / steel materials and bevels as the other pieces. Origin is between the feet.
+ * Upright block + legs = a clearly different silhouette from the mint courier (floating rounded diamond).
+ * `data-part="scout-head"` marks the head block so tests can check it is visible and not covered.
+ * Ghost (forecast) copies are translucent with a dashed outline and have no shadow.
+ */
 export function Intruder({ expression, ghost = false }: { expression: Expression; ghost?: boolean }) {
   const lured = expression === 'bait';
-  const visor =
-    expression === 'blocked' || expression === 'captured'
-      ? '-10,-25 10,-25 9,-22 -9,-22'
-      : lured
-        ? '-11,-24 11,-28 9,-22 -9,-20'
-        : '-11,-28 11,-25 9,-20 -9,-22';
+  const narrow = expression === 'blocked';
+  const hw = 14;
+  const h = 24;
   const glint = lured ? PAL.amber : PAL.ivory;
+  const x0 = -hw + 2.5;
+  const x1 = -2.5;
+  // visor in left-face coordinates: level when heading for the vault, tilted up when lured, a thin slit when blocked/trapped
+  const visor = narrow
+    ? `${x0},${-h + 8.6} ${x1},${-h + 8.6} ${x1},${-h + 11.6} ${x0},${-h + 11.6}`
+    : lured
+      ? `${x0},${-h + 6.8} ${x1},${-h + 3.8} ${x1},${-h + 12.6} ${x0},${-h + 15}`
+      : `${x0},${-h + 5} ${x1},${-h + 5.6} ${x1},${-h + 14.4} ${x0},${-h + 14}`;
+  const leg = (x: number, fill: string, foot: string) => (
+    <g key={x}>
+      <rect x={x - 3.5} y={-16} width="7" height="12" rx="2" fill={fill} />
+      <circle cx={x} cy={-10.5} r="2.3" fill={PAL.steel} stroke={PAL.steelD} strokeWidth="0.8" />
+      <polygon points={`${x - 5.5},-4 ${x + 5.5},-4 ${x + 7},0 ${x - 7},0`} fill={foot} />
+      <line x1={x - 5.5} y1={-4} x2={x + 5.5} y2={-4} stroke="rgba(255,255,255,0.4)" strokeWidth="1" />
+    </g>
+  );
   return (
     <g className={`piece intruder-piece ${ghost ? 'ghost' : ''} ${expression}`}>
-      {!ghost && <ellipse cx="0" cy="0" rx="15" ry="6" fill="rgba(0,0,0,0.38)" />}
-      <polygon points="-15,-30 -23,-41 -8,-36" fill="#D95D56" />
-      <polygon points="15,-30 23,-41 8,-36" fill="#C4504A" />
-      <polygon points="0,-46 -15,-30 -12,-10 0,-3" fill="#F58A82" />
-      <polygon points="0,-46 15,-30 12,-10 0,-3" fill={PAL.coral} />
-      <polygon points="-11,-9 0,0 11,-9 0,-3" fill="#B84842" />
-      <polyline points="-15,-30 0,-46 15,-30" fill="none" stroke="rgba(255,255,255,0.45)" strokeWidth="1.3" strokeLinejoin="round" />
-      <polygon points="-9,-5 -4,-1.5 -9,0.5 -13,-2" fill={PAL.steel} />
-      <polygon points="9,-5 4,-1.5 9,0.5 13,-2" fill={PAL.steelD} />
-      <circle cx="-14" cy="-18" r="1.8" fill={PAL.steelL} />
-      <circle cx="14" cy="-18" r="1.8" fill={PAL.steelD} />
-      <polygon points={visor} fill={PAL.ink} />
-      {expression === 'captured' ? (
-        <path d="M-5 -26 l4 3 m0 -3 l-4 3" stroke={PAL.ivory} strokeWidth="1.6" strokeLinecap="round" opacity="0.8" />
-      ) : (
-        <path d={lured ? 'M2 -25 L8 -26' : 'M2 -24.5 L8 -23.8'} stroke={glint} strokeWidth="2" strokeLinecap="round" />
+      {!ghost && <ellipse cx="0" cy="0" rx="17" ry="6.5" fill="rgba(0,0,0,0.38)" />}
+      {/* far arm, behind the body */}
+      <rect x={-21} y={-31} width="6" height="15" rx="2.2" fill="#B84842" />
+      <polygon points="-21,-16 -15,-16 -16,-11 -20,-11" fill={PAL.steelD} />
+      {leg(-8, '#D95D56', PAL.steelD)}
+      {leg(8, '#C4504A', PAL.steel)}
+      {/* head + torso block (the semantic head) */}
+      <g data-part="scout-head" transform="translate(0 -14)">
+        <IsoBox hw={hw} h={h} top="#F9A59C" left="#F58A82" right="#DD625B">
+          <g transform={leftFace(hw)}>
+            <polygon points={visor} fill={PAL.ink} stroke="rgba(255,255,255,0.25)" strokeWidth="0.8" strokeLinejoin="round" />
+            {expression === 'captured' ? (
+              <path d={`M${-9.7} ${-h + 6.9} l5.4 6 m0 -6 l-5.4 6`} stroke={PAL.ivory} strokeWidth="1.9" strokeLinecap="round" fill="none" opacity="0.9" />
+            ) : (
+              <path d={lured ? `M${-7} ${-h + 8.4} L${-3.8} ${-h + 7.6}` : `M${-7.5} ${-h + 8.4} L${-3.8} ${-h + 8.6}`} stroke={glint} strokeWidth="2" strokeLinecap="round" fill="none" />
+            )}
+          </g>
+          <g transform={rightFace(hw)}>
+            <circle cx={hw - 5} cy={-h + 11} r="5.2" fill={PAL.steelD} stroke={PAL.steelL} strokeWidth="1.2" />
+            <circle cx={hw - 5} cy={-h + 11} r="2" fill={PAL.slate} />
+            <line x1="3.5" y1={-5} x2="9" y2={-5} stroke="rgba(0,0,0,0.25)" strokeWidth="1.4" strokeLinecap="round" />
+          </g>
+        </IsoBox>
+      </g>
+      {/* near arm, hanging beside the shoulder disc */}
+      <rect x={14.5} y={-31} width="6" height="15" rx="2.2" fill="#C4504A" />
+      <polygon points="14.5,-16 20.5,-16 19.5,-11 15.5,-11" fill={PAL.steel} />
+      {ghost && (
+        <polygon
+          points={`0,${-14 - h - hw * K} ${hw},${-14 - h} ${hw},-14 0,${-14 + hw * K} ${-hw},-14 ${-hw},${-14 - h}`}
+          fill="none" stroke={PAL.ivory} strokeWidth="2" strokeDasharray="3 3" strokeLinejoin="round"
+        />
       )}
     </g>
   );
