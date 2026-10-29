@@ -1,8 +1,8 @@
 {
   "name": "trapline",
-  "version": "0.1.0-a1",
+  "version": "0.1.0",
   "private": true,
-  "description": "TRAPLINE - unreleased tactical puzzle slice (Stage A1)",
+  "description": "TRAPLINE - playable prototype: a three-level tactical puzzle",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",

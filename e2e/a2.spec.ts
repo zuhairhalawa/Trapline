@@ -260,7 +260,7 @@ test('title: art loads from the /Trapline/ base path, Play is first and visible,
   await expect(page.getByTestId('title-demo').getByTestId('board')).toBeVisible();
   await expect(page.getByTestId('title-demo')).toContainText('Real game board');
   await expect(page.getByRole('button', { name: /^Sound:/ })).toBeVisible();
-  await expect(page.getByText('Unreleased playable slice')).toBeVisible();
+  await expect(page.getByText('Playable prototype')).toBeVisible();
   await noHorizontalOverflow(page);
 });
 

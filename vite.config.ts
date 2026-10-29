@@ -3,7 +3,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
 // GitHub Pages base path is configured here so dev, preview and build agree.
-// Nothing is deployed by this repository.
+// Deployed to GitHub Pages by the workflow in .github/workflows.
 export default defineConfig({
   base: '/Trapline/',
   plugins: [react()],

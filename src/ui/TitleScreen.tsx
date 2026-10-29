@@ -49,7 +49,7 @@ export function TitleScreen({ progress, continueIndex, onPlay, onAbout, muted, o
     <main className="title" data-testid="title">
       <TitleArt />
       <div className="title-copy">
-        <p className="eyebrow">Unreleased playable slice</p>
+        <p className="eyebrow">Playable prototype</p>
         <h1>TRAPLINE</h1>
         <p className="tagline">Lure the intruder into the trap. Keep the packet moving.</p>
         <div className="title-actions">
