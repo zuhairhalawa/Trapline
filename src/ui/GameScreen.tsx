@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useReducer } from 'react';
+import { useEffect, useMemo, useReducer, useRef } from 'react';
 import type { Command, LevelDef } from '../engine';
 import { resolveTurn, validateCommand } from '../engine';
 import { LEVELS } from '../levels/levels';
@@ -116,6 +116,12 @@ export function GameScreen(p: Props) {
   const status = current.status;
   const over = !playing && !busy;
   const nextIndex = p.index + 1 < LEVELS.length ? p.index + 1 : -1;
+  const resultRef = useRef<HTMLElement | null>(null);
+  // Bring the outcome into view (scroll-padding keeps it clear of the pinned tray).
+  useEffect(() => {
+    if (over) resultRef.current?.scrollIntoView({ block: 'nearest', behavior: reduced ? 'auto' : 'smooth' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [over]);
 
   const announce = selected && preview
     ? `Queued ${info.name}. ${intruderLine(level, preview, preview.state.armed)}`
@@ -126,7 +132,7 @@ export function GameScreen(p: Props) {
   // Level 1 doubles as the interactive introduction.
   let coach: string | null = null;
   if (level.number === 1 && playing && !busy) {
-    if (current.turn === 0 && !selected) coach = '1. Select Bait. It arms the trap, the cage on the right.';
+    if (current.turn === 0 && !selected) coach = '1. Select Bait. It arms the trap on the right.';
     else if (current.turn === 0) coach = '2. The dashed arrows show the next move for both pieces. Press Advance.';
     else coach = '3. The intruder is next to the trap. Nothing more to arm: Wait, then Advance.';
   }
@@ -198,6 +204,7 @@ export function GameScreen(p: Props) {
             <span className="lg coral">Intruder</span>
             <span className="lg mint">Courier</span>
             <span className="lg dash">Dashed arrows: next turn</span>
+            <span className="lg queue">Dashed amber: queued change</span>
           </p>
         </section>
 
@@ -240,7 +247,7 @@ export function GameScreen(p: Props) {
           )}
 
           {over && status === 'won' && (
-            <section className="result win" aria-label="Result" data-testid="result" data-status="won">
+            <section className="result win" aria-label="Result" data-testid="result" data-status="won" ref={resultRef}>
               <h3>Trap sprung. Packet delivered.</h3>
               <p>Level complete in {current.turn} {current.turn === 1 ? 'turn' : 'turns'}, using {level.budget - current.charges} of {level.budget} commands.</p>
               <div className="result-actions">
@@ -255,14 +262,14 @@ export function GameScreen(p: Props) {
             </section>
           )}
           {over && status === 'lost' && (
-            <section className="result loss" aria-label="Result" data-testid="result" data-status="lost">
+            <section className="result loss" aria-label="Result" data-testid="result" data-status="lost" ref={resultRef}>
               <h3>{current.lossReason === 'breach' ? 'Breach' : 'Out of turns'}</h3>
               <p>{lossText}</p>
               <p className="fine">Undo the last turn or restart to try another plan.</p>
             </section>
           )}
 
-          <div className={`actions ${over ? 'over' : ''}`} role="group" aria-label="Commands">
+          <div className={`actions ${over ? 'over' : ''}`} role="group" aria-label="Commands" data-testid="tray">
             <div className="cmd-row">
               {cmds.map((c) => {
                 const ci = describeCommand(level, current, c);

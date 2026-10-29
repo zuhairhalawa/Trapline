@@ -3,7 +3,7 @@ import type { Command, GameState, LevelDef, NodeDef, TurnResult } from '../engin
 import { validateCommand } from '../engine';
 import { sameCommand } from '../ui/gameReducer';
 import {
-  Courier, DeadEnd, DropDock, Gate, Intruder, K, PAL, Portal, ServerBox, Tile, Tower, TrapBack, TrapFront, Vault,
+  Courier, DeadEnd, DropDock, Gate, Intruder, JunctionPiece, K, PAL, Portal, ServerBox, Tile, TrapBack, TrapFront, Vault,
   type Expression,
 } from './pieces';
 import { describeCommand, nodeLabel } from './text';
@@ -31,15 +31,17 @@ export interface BoardProps {
 const diamond = (cx: number, cy: number, hw: number) =>
   `${cx - hw},${cy} ${cx},${cy + hw * K} ${cx + hw},${cy} ${cx},${cy - hw * K}`;
 
-function Pill({ x, y, text, tone, preview, s = 1 }: { x: number; y: number; text: string; tone: 'coral' | 'mint' | 'amber'; preview?: boolean; s?: number }) {
+function Pill({ x, y, text, tone, preview, s = 1, testId }: { x: number; y: number; text: string; tone: 'coral' | 'mint' | 'amber'; preview?: boolean; s?: number; testId?: string }) {
   const w = text.length * 7.2 + 24;
   const c = tone === 'coral' ? PAL.coral : tone === 'mint' ? PAL.mint : PAL.amber;
   return (
-    <g className={`pill ${preview ? 'preview' : ''}`} transform={`translate(${x} ${y}) scale(${s})`}>
-      <rect x={-w / 2} y={-12} width={w} height={24} rx={12} fill={PAL.ink} stroke={c} strokeWidth={2} strokeDasharray={preview ? '4 3' : undefined} />
-      <text x={0} y={4.5} textAnchor="middle" fill={c} fontSize={12.5} fontWeight={700} letterSpacing="0.04em">
-        {text}
-      </text>
+    <g className={`pill ${preview ? 'preview queued-mark' : 'pop'}`} data-testid={testId} transform={`translate(${x} ${y}) scale(${s})`}>
+      <g className="pill-inner">
+        <rect x={-w / 2} y={-12} width={w} height={24} rx={12} fill={PAL.ink} stroke={c} strokeWidth={2} strokeDasharray={preview ? '4 3' : undefined} />
+        <text x={0} y={4.5} textAnchor="middle" fill={c} fontSize={12.5} fontWeight={700} letterSpacing="0.04em">
+          {text}
+        </text>
+      </g>
     </g>
   );
 }
@@ -86,24 +88,43 @@ export function Board({ level, state, preview, selected, interactive, onCommand,
   const nodeById = new Map(level.nodes.map((n) => [n.id, n] as const));
   const P = (id: string): Pt => pos(nodeById.get(id) as NodeDef);
 
+  // ---- what the player has queued (only while a valid preview is shown; never mutates committed state) ----
+  const showPreview = preview !== null && preview.ok !== undefined && state.status === 'playing';
+  const pv = showPreview ? preview : null;
+  const q = pv && pv.ok ? selected : null;
+  const qGate = q?.kind === 'shutter' ? q.id : null;
+  const qSwitch = q?.kind === 'reroute' ? q.id : null;
+  const qBait = q?.kind === 'bait' && state.armed !== q.target ? q.target : null;
+
   // ---- edges (all of them, with their live state) ----
-  type EdgeView = { key: string; a: Pt; b: Pt; open: boolean; alt: boolean; shutter: string | null };
+  // role: current = live junction branch; closing/opening = what a queued command will do to the route.
+  type Role = 'none' | 'current' | 'closing' | 'opening';
+  type EdgeView = { key: string; a: Pt; b: Pt; open: boolean; alt: boolean; shutter: string | null; role: Role };
   const edges: EdgeView[] = [];
-  for (const [a, b] of level.edges) edges.push({ key: `${a}-${b}`, a: P(a), b: P(b), open: true, alt: false, shutter: null });
+  for (const [a, b] of level.edges) edges.push({ key: `${a}-${b}`, a: P(a), b: P(b), open: true, alt: false, shutter: null, role: 'none' });
   for (const sw of level.switches) {
     const cur = state.switches[sw.id] ?? sw.initial;
-    sw.options.forEach(([a, b], i) => edges.push({ key: `${a}-${b}`, a: P(a), b: P(b), open: i === cur, alt: true, shutter: null }));
+    sw.options.forEach(([a, b], i) => {
+      const live = i === cur;
+      const role: Role = qSwitch === sw.id ? (live ? 'closing' : 'opening') : live ? 'current' : 'none';
+      edges.push({ key: `${a}-${b}`, a: P(a), b: P(b), open: live, alt: true, shutter: null, role });
+    });
   }
   for (const sh of level.shutters) {
     const open = state.shutters[sh.id] ?? sh.initiallyOpen;
-    edges.push({ key: `${sh.edge[0]}-${sh.edge[1]}`, a: P(sh.edge[0]), b: P(sh.edge[1]), open, alt: false, shutter: sh.id });
+    const role: Role = qGate === sh.id ? (open ? 'closing' : 'opening') : 'none';
+    edges.push({ key: `${sh.edge[0]}-${sh.edge[1]}`, a: P(sh.edge[0]), b: P(sh.edge[1]), open, alt: false, shutter: sh.id, role });
   }
 
-  // ---- bounds ----
-  const all: Pt[] = [...level.nodes.map(pos), ...level.scenery.map((s) => ({ x: s.x * xScale, y: s.y }))];
+  // ---- bounds (network only: no decorative scenery) ----
+  const all: Pt[] = level.nodes.map(pos);
   const minX = Math.min(...all.map((p) => p.x)) - PAD_FULL - 14;
   const maxX = Math.max(...all.map((p) => p.x)) + PAD_FULL + 14;
-  const minY = Math.min(...all.map((p) => p.y)) - (f > 1 ? 112 : 125);
+  const goalIsVault = level.courierGoal === level.vault;
+  const topPad = (n: NodeDef) => (n.id === level.vault && goalIsVault ? 100 + 40 * f : f > 1 ? 122 : 125);
+  const minY = Math.min(...level.nodes.map((n) => pos(n).y - topPad(n)));
+  /** Pill above the courier goal; stacked above the BREACH pill when the goal is the vault itself. */
+  const goalDy = goalIsVault ? -(100 + 28 * f) : -66;
   const maxY = Math.max(...all.map((p) => p.y)) + 118 + 10 * f;
   const vb = `${minX} ${minY} ${maxX - minX} ${maxY - minY}`;
 
@@ -113,6 +134,7 @@ export function Board({ level, state, preview, selected, interactive, onCommand,
     switch (n.kind) {
       case 'relay': case 'side': case 'source': return { x: base.x, y: base.y - 14 };
       case 'vault': return { x: base.x, y: base.y + 14 };
+      case 'trap': return { x: base.x, y: base.y - 14 }; // rises out of the open box; the lid front hides its feet
       default: return { x: base.x, y: base.y - 2 };
     }
   };
@@ -126,8 +148,6 @@ export function Board({ level, state, preview, selected, interactive, onCommand,
   const iPt = actorPoint(iAt, 'i', sharing);
   const cPt = actorPoint(cAt, 'c', sharing);
 
-  const showPreview = preview !== null && preview.ok !== undefined && state.status === 'playing';
-  const pv = showPreview ? preview : null;
   const iNext = pv?.state.intruder.at ?? iAt;
   const cNext = pv?.state.courier.at ?? cAt;
   const nextShare = iNext === cNext;
@@ -153,17 +173,65 @@ export function Board({ level, state, preview, selected, interactive, onCommand,
     const c: Command = { kind: 'bait', target: t };
     targets.push({ key: `bait-${t}`, at: { x: P(t).x, y: P(t).y - 14 }, r: 54, command: c, label: `Trap at ${nodeLabel(level, t)}` });
   }
-  const dials = level.switches.map((sw) => {
+  const unit = (from: Pt, to: Pt): Pt => {
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const l = Math.hypot(dx, dy) || 1;
+    return { x: dx / l, y: dy / l };
+  };
+  /**
+   * The junction plate goes in the open space around its hub: the candidate position (ring of angles and radii)
+   * that stays furthest from every track, node and other tap target, so its 84px+ hit circle never overlaps a
+   * neighbour. It depends only on level geometry, so the plate does not move when the junction flips.
+   */
+  const segDist = (p: Pt, a: Pt, b: Pt) => {
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy || 1)));
+    return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+  };
+  const JR = 42;
+  const others = [
+    ...targets.map((t) => ({ at: t.at, r: t.r })),
+    ...level.shutters.map((sh) => {
+      const a = P(sh.edge[0]);
+      const b = P(sh.edge[1]);
+      return { at: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 - 12 }, r: 42 };
+    }),
+  ];
+  const placeJunction = (hub: Pt): Pt => {
+    let best: Pt = { x: hub.x - 110, y: hub.y };
+    let bestScore = -Infinity;
+    for (let deg = 0; deg < 360; deg += 15) {
+      for (const R of [105, 125, 145]) {
+        const a = (deg * Math.PI) / 180;
+        const c: Pt = { x: hub.x + R * Math.cos(a), y: hub.y + R * Math.sin(a) * 0.75 };
+        if (c.x < minX + 45 || c.x > maxX - 45 || c.y < minY + 50 || c.y > maxY - 70) continue;
+        const dEdge = Math.min(...edges.map((e) => segDist(c, e.a, e.b))) - 34;
+        const dNode = Math.min(...level.nodes.map((n) => Math.hypot(c.x - pos(n).x, c.y - pos(n).y))) - 92;
+        const dTarget = Math.min(...others.map((o) => Math.hypot(c.x - o.at.x, c.y - 8 - o.at.y) - (JR + o.r) - 4));
+        const score = Math.min(dEdge, dNode, dTarget) + (c.x < hub.x ? 3 : 0) - R * 0.02;
+        if (score > bestScore) { bestScore = score; best = c; }
+      }
+    }
+    return best;
+  };
+  const junctions = level.switches.map((sw) => {
     const hub = P(sw.hub);
     const cur = state.switches[sw.id] ?? sw.initial;
-    const other = sw.options[cur].find((x) => x !== sw.hub) as string;
-    const o = P(other);
-    const dx = o.x - hub.x;
-    const dy = o.y - hub.y;
-    const l = Math.hypot(dx, dy) || 1;
-    return { sw, at: { x: hub.x - 44, y: hub.y + 24 }, dir: { x: dx / l, y: dy / l } };
+    const end = (i: 0 | 1) => P(sw.options[i].find((x) => x !== sw.hub) as string);
+    const curEnd = end(cur);
+    const altEnd = end(cur === 0 ? 1 : 0);
+    return {
+      sw,
+      at: placeJunction(hub),
+      cur: unit(hub, curEnd),
+      alt: unit(hub, altEnd),
+      curTo: nodeLabel(level, sw.options[cur].find((x) => x !== sw.hub) as string),
+      altTo: nodeLabel(level, sw.options[cur === 0 ? 1 : 0].find((x) => x !== sw.hub) as string),
+    };
   });
-  for (const d of dials) targets.push({ key: `rr-${d.sw.id}`, at: d.at, r: 52, command: { kind: 'reroute', id: d.sw.id }, label: `Junction at ${nodeLabel(level, d.sw.hub)}` });
+  for (const d of junctions) targets.push({ key: `rr-${d.sw.id}`, at: { x: d.at.x, y: d.at.y - 8 }, r: 42, command: { kind: 'reroute', id: d.sw.id }, label: `Junction at ${nodeLabel(level, d.sw.hub)}, now to ${d.curTo}, queues switch to ${d.altTo}` });
   const gates = level.shutters.map((sh) => {
     const a = P(sh.edge[0]);
     const b = P(sh.edge[1]);
@@ -172,7 +240,7 @@ export function Board({ level, state, preview, selected, interactive, onCommand,
     const l = Math.hypot(dx, dy) || 1;
     return { sh, at: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, u: { x: dx / l, y: dy / l }, open: state.shutters[sh.id] ?? sh.initiallyOpen };
   });
-  for (const g of gates) targets.push({ key: `sh-${g.sh.id}`, at: { x: g.at.x, y: g.at.y - 12 }, r: 52, command: { kind: 'shutter', id: g.sh.id }, label: `Gate ${nodeLabel(level, g.sh.edge[0])} to ${nodeLabel(level, g.sh.edge[1])}` });
+  for (const g of gates) targets.push({ key: `sh-${g.sh.id}`, at: { x: g.at.x, y: g.at.y - 12 }, r: 42, command: { kind: 'shutter', id: g.sh.id }, label: `Gate ${nodeLabel(level, g.sh.edge[0])} to ${nodeLabel(level, g.sh.edge[1])}` });
 
   const onKey = (e: KeyboardEvent, c: Command) => {
     if (e.key === 'Enter' || e.key === ' ') {
@@ -223,19 +291,8 @@ export function Board({ level, state, preview, selected, interactive, onCommand,
               {edges.map((e) => <line key={e.key} x1={e.a.x} y1={e.a.y} x2={e.b.x} y2={e.b.y} />)}
             </g>
             <g strokeWidth={PAD_STROKE}>
-              {level.nodes.map((n) => { const q = pos(n); return <polygon key={n.id} points={diamond(q.x, q.y, PAD_NODE)} />; })}
-              {level.scenery.map((s, i) => <polygon key={`sc${i}`} points={diamond(s.x * xScale, s.y, 32)} />)}
+              {level.nodes.map((n) => { const p = pos(n); return <polygon key={n.id} points={diamond(p.x, p.y, PAD_NODE)} />; })}
             </g>
-          </g>
-        ))}
-      </g>
-
-      {/* scenery */}
-      <g aria-hidden="true">
-        {level.scenery.map((s, i) => (
-          <g key={i} transform={`translate(${s.x * xScale} ${s.y})`}>
-            <ellipse cx="0" cy="6" rx="30" ry="14" fill="rgba(0,0,0,0.3)" />
-            <Tower h={s.h} />
           </g>
         ))}
       </g>
@@ -245,10 +302,18 @@ export function Board({ level, state, preview, selected, interactive, onCommand,
         {edges.map((e) => {
           const live = e.open;
           return (
-            <g key={`e${e.key}`} className={`edge ${live ? 'open' : 'shut'} ${e.alt ? 'alt' : ''}`} data-edge={e.key} data-open={live}>
+            <g key={`e${e.key}`} className={`edge ${live ? 'open' : 'shut'} ${e.alt ? 'alt' : ''}`} data-edge={e.key} data-open={live} data-role={e.role}>
+              {e.role === 'current' && <line x1={e.a.x} y1={e.a.y} x2={e.b.x} y2={e.b.y} stroke={PAL.amber} strokeWidth={30} opacity={0.3} />}
               <line x1={e.a.x} y1={e.a.y + 5} x2={e.b.x} y2={e.b.y + 5} stroke={PAL.trackSide} strokeWidth={live ? 20 : 12} strokeDasharray={live ? undefined : '3 12'} />
               <line x1={e.a.x} y1={e.a.y} x2={e.b.x} y2={e.b.y} stroke={live ? PAL.track : '#52483f'} strokeWidth={live ? 18 : 8} strokeDasharray={live ? undefined : '3 12'} />
               {live && <line x1={e.a.x} y1={e.a.y} x2={e.b.x} y2={e.b.y} stroke="rgba(244,237,226,0.16)" strokeWidth={3} />}
+              {e.role === 'closing' && <line className="route-mark" x1={e.a.x} y1={e.a.y} x2={e.b.x} y2={e.b.y} stroke={PAL.coral} strokeWidth={9} strokeDasharray="12 9" strokeLinecap="butt" />}
+              {e.role === 'opening' && (
+                <>
+                  <line x1={e.a.x} y1={e.a.y} x2={e.b.x} y2={e.b.y} stroke={PAL.amber} strokeWidth={26} opacity={0.22} />
+                  <line className="route-mark" x1={e.a.x} y1={e.a.y} x2={e.b.x} y2={e.b.y} stroke={PAL.amber} strokeWidth={9} strokeDasharray="12 9" strokeLinecap="butt" />
+                </>
+              )}
             </g>
           );
         })}
@@ -258,11 +323,11 @@ export function Board({ level, state, preview, selected, interactive, onCommand,
       {gates.map((g) => (
         <g key={g.sh.id} transform={`translate(${g.at.x} ${g.at.y})`} data-testid={`gate-${g.sh.id}`} data-open={g.open}>
           <Gate open={g.open} ux={g.u.x} uy={g.u.y} />
-          <g transform={`translate(0 30) scale(${f})`}>
-            <text className="tag" textAnchor="middle" fill={g.open ? PAL.mint : PAL.coral} fontSize={12} fontWeight={800} letterSpacing="0.08em">
-              {g.open ? 'OPEN' : 'SEALED'}
-            </text>
-          </g>
+          {qGate === g.sh.id && (
+            <g className="ghost-gate-wrap" opacity={0.6} data-testid={`gate-ghost-${g.sh.id}`} data-will-open={!g.open}>
+              <Gate open={!g.open} ux={g.u.x} uy={g.u.y} ghost />
+            </g>
+          )}
         </g>
       ))}
 
@@ -280,22 +345,21 @@ export function Board({ level, state, preview, selected, interactive, onCommand,
             {n.kind === 'dead' && <DeadEnd />}
             {n.kind === 'vault' && <Vault breached={state.intruder.breached} />}
             {n.kind === 'drop' && <DropDock delivered={state.courier.delivered} />}
-            {n.kind === 'trap' && <TrapBack armed={isArmed} closed={closed} />}
+            {n.kind === 'trap' && <g transform="scale(1.2)"><TrapBack armed={isArmed} closed={closed} /></g>}
+            {n.kind === 'trap' && qBait === n.id && <ellipse className="queued-ring" cx="0" cy="2" rx="52" ry="30" fill="none" stroke={PAL.amber} strokeWidth="3.5" strokeDasharray="8 6" />}
           </g>
         );
       })}
 
       {/* switch dials */}
-      {dials.map((d) => (
-        <g key={d.sw.id} transform={`translate(${d.at.x} ${d.at.y})`} data-testid={`dial-${d.sw.id}`} aria-hidden="true">
-          <ellipse cx="0" cy="5" rx="15" ry="9" fill="rgba(0,0,0,0.45)" />
-          <circle r="14" fill={PAL.ink} stroke={PAL.ivory} strokeWidth="3" />
-          <line x1="0" y1="0" x2={d.dir.x * 10} y2={d.dir.y * 7} stroke={PAL.amber} strokeWidth="4" strokeLinecap="round" className="lever" />
-          <circle cx={d.dir.x * 10} cy={d.dir.y * 7} r="3.6" fill={PAL.amber} />
-          <circle r="3" fill={PAL.ivory} />
-          {f === 1 && <text x="-22" y="4.5" textAnchor="end" fill={PAL.ivory} fontSize={11} fontWeight={800} letterSpacing="0.08em" opacity={0.85} style={{ paintOrder: 'stroke' }} stroke={PAL.ink} strokeWidth={3}>
-            JUNCTION
-          </text>}
+      {junctions.map((d) => (
+        <g key={d.sw.id} transform={`translate(${d.at.x} ${d.at.y})`} data-testid={`dial-${d.sw.id}`} data-now={d.curTo} data-queued={qSwitch === d.sw.id} aria-hidden="true">
+          <g transform="scale(1.2)"><JunctionPiece cur={d.cur} alt={d.alt} queued={qSwitch === d.sw.id} /></g>
+          {/* always-visible label, on phones too (scaled with the other board text) */}
+          <g transform={`translate(0 ${30 + 8 * f}) scale(${f})`} data-testid={`junction-label-${d.sw.id}`}>
+            <rect x={-42} y={-11} width={84} height={20} rx={10} fill={PAL.ink} opacity={0.88} stroke={qSwitch === d.sw.id ? PAL.amber : 'none'} strokeWidth={1.5} />
+            <text textAnchor="middle" y={3.5} fill={PAL.ivory} fontSize={12} fontWeight={800} letterSpacing="0.08em">JUNCTION</text>
+          </g>
         </g>
       ))}
 
@@ -315,6 +379,17 @@ export function Board({ level, state, preview, selected, interactive, onCommand,
             </g>
           );
         })}
+      </g>
+
+      {/* gate state tags: above nodes so the vault never clips them; NOW = committed state while a change is queued */}
+      <g aria-hidden="true">
+        {gates.map((g) => (
+          <g key={g.sh.id} transform={`translate(${g.at.x + 26} ${g.at.y + -50 - 4 * f}) scale(${f})`}>
+            <text className="tag" data-testid={`gate-now-${g.sh.id}`} textAnchor="middle" fill={g.open ? PAL.mint : PAL.coral} fontSize={12} fontWeight={800} letterSpacing="0.08em" style={{ paintOrder: 'stroke' }} stroke={PAL.ink} strokeWidth={3.5}>
+              {qGate === g.sh.id ? 'NOW ' : ''}{g.open ? 'OPEN' : 'SEALED'}
+            </text>
+          </g>
+        ))}
       </g>
 
       {/* ghost arrows + ghost pieces */}
@@ -383,7 +458,7 @@ export function Board({ level, state, preview, selected, interactive, onCommand,
           const closed = state.intruder.captured && state.intruder.at === n.id;
           return (
             <g key={n.id} transform={`translate(${p.x} ${p.y})`}>
-              <TrapFront armed={state.armed === n.id} closed={closed} />
+              <g transform="scale(1.2)"><TrapFront armed={state.armed === n.id} closed={closed} /></g>
             </g>
           );
         })}
@@ -393,10 +468,22 @@ export function Board({ level, state, preview, selected, interactive, onCommand,
       <g aria-hidden="true">
         {state.intruder.captured && <Pill x={P(state.intruder.at).x} y={P(state.intruder.at).y - 84} text="TRAPPED" tone="amber" s={f} />}
         {state.intruder.breached && <Pill x={P(level.vault).x} y={P(level.vault).y - 96} text="BREACH" tone="coral" s={f} />}
-        {state.courier.delivered && <Pill x={P(level.courierGoal).x} y={P(level.courierGoal).y - 66} text="DELIVERED" tone="mint" s={f} />}
+        {state.courier.delivered && <Pill x={P(level.courierGoal).x} y={P(level.courierGoal).y + goalDy} text="DELIVERED" tone="mint" s={f} />}
         {pv && previewCaptured && !state.intruder.captured && <Pill x={P(iNext).x} y={P(iNext).y - 84} text="TRAP CLOSES" tone="amber" preview s={f} />}
         {pv && previewBreach && <Pill x={P(level.vault).x} y={P(level.vault).y - 96} text="BREACH" tone="coral" preview s={f} />}
-        {pv && previewDelivered && !state.courier.delivered && <Pill x={P(level.courierGoal).x} y={P(level.courierGoal).y - 66} text="DELIVERS" tone="mint" preview s={f} />}
+        {pv && previewDelivered && !state.courier.delivered && <Pill x={P(level.courierGoal).x} y={P(level.courierGoal).y + goalDy} text="DELIVERS" tone="mint" preview s={f} />}
+        {/* queued-command marks, anchored to the thing they change; CURRENT state stays drawn underneath */}
+        {qBait && <Pill x={P(qBait).x} y={P(qBait).y + 62 + 8 * (f - 1) + 26 * f} text="WILL ARM" tone="amber" preview s={f} testId={`queued-bait-${qBait}`} />}
+        {gates.filter((g) => qGate === g.sh.id).map((g) => (
+          <Pill key={g.sh.id} x={g.at.x + 40} y={g.at.y - 84 - 12 * f} text={g.open ? 'WILL SEAL' : 'WILL OPEN'} tone={g.open ? 'coral' : 'mint'} preview s={f} testId={`queued-gate-${g.sh.id}`} />
+        ))}
+        {qSwitch && edges.filter((e) => e.alt && (e.role === 'closing' || e.role === 'opening')).map((e) => (
+          <Pill
+            key={e.key} x={(e.a.x + e.b.x) / 2} y={(e.a.y + e.b.y) / 2 - 8 - (e.role === 'closing' ? 40 * (f - 1) : 0)}
+            text={e.role === 'closing' ? 'CLOSES' : 'OPENS'} tone={e.role === 'closing' ? 'coral' : 'amber'} preview s={f}
+            testId={`queued-route-${e.role}`}
+          />
+        ))}
       </g>
 
       {/* interactive targets */}
@@ -416,17 +503,12 @@ export function Board({ level, state, preview, selected, interactive, onCommand,
               aria-label={label}
               aria-pressed={isSel}
               data-testid={`target-${t.key}`}
+              data-queued={isSel}
               onClick={() => onCommand?.(t.command)}
               onKeyDown={(e) => onKey(e, t.command)}
             >
               <circle className="hit" r={t.r} fill="transparent" />
               <ellipse className="ring" rx={t.r * 0.85} ry={t.r * 0.52} cy={t.r * 0.25} fill="none" strokeWidth={4} />
-              {isSel && (
-                <g transform={`translate(0 ${-t.r - 34}) scale(${f})`}>
-                  <rect x={-34} y={-11} width={68} height={22} rx={11} fill={PAL.ivory} />
-                  <text textAnchor="middle" y={4.5} fontSize={12} fontWeight={800} fill={PAL.ink} letterSpacing="0.06em">QUEUED</text>
-                </g>
-              )}
             </g>
           );
         })}

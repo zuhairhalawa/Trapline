@@ -10,34 +10,44 @@
 .ghost-arrow .march { animation: march 1s linear infinite; }
 @keyframes march { to { stroke-dashoffset: -22; } }
 .wait-badge { opacity: 0.95; }
-.pill.preview { animation: pillbob 1.4s ease-in-out infinite; }
+.pill.preview .pill-inner { animation: pillbob 1.4s ease-in-out infinite; }
 @keyframes pillbob { 50% { transform: translateY(-3px); } }
 .pill { paint-order: stroke; }
 
-/* honeypot */
+/* honeypot: idle / armed / sprung are separate drawings; these only add small motion cues */
 .trap.armed .trap-ring { animation: pulse 1.6s ease-in-out infinite; }
 @keyframes pulse { 50% { stroke-opacity: 0.35; } }
 .morsel { animation: bob 1.8s ease-in-out infinite; }
 @keyframes bob { 50% { transform: translateY(-4px); } }
-.trap-front .lid { transform-box: fill-box; transform-origin: 100% 100%; transition: transform 0.45s cubic-bezier(0.5, 0, 0.3, 1) 0.28s, opacity 0.3s ease 0.28s; }
-.trap-front:not(.closed) .lid { transform: translate(16px, -30px) rotate(-38deg); opacity: 0.4; }
-.trap-front.closed .lid { transform: none; opacity: 0.16; }
-.trap-front.closed { animation: snap 0.5s ease-out 0.3s; }
-@keyframes snap { 0% { transform: translateY(-6px); } 100% { transform: translateY(0); } }
+.led { animation: led 1.4s ease-in-out infinite; }
+@keyframes led { 50% { opacity: 0.45; } }
+.trap-front.closed .lid-front, .trap.closed .lid-back { animation: slam 0.42s cubic-bezier(0.5, 0, 0.3, 1) both; }
+@keyframes slam { 0% { transform: translateY(-14px); opacity: 0.2; } 70% { transform: translateY(2px); opacity: 1; } 100% { transform: none; } }
+.queued-ring { animation: dashmove 1.2s linear infinite; }
+@keyframes dashmove { to { stroke-dashoffset: -28; } }
 
 /* vault / dock */
 .vault.breached { animation: shake 0.5s ease-in-out 3; filter: drop-shadow(0 0 10px rgba(239, 112, 104, 0.9)); }
 @keyframes shake { 25% { transform: translate(-3px, -6px); } 75% { transform: translate(3px, -6px); } }
 .dock.delivered { filter: drop-shadow(0 0 8px rgba(104, 215, 188, 0.75)); }
 
-.gate .slats { transition: opacity 0.3s ease; }
-.lever { transition: all 0.3s ease; }
+/* gates close with a short drop; reroute flips the lever and flashes the new branch; capture pops its tag */
+.gate.closed:not(.ghost-gate) .slats { animation: drop 0.36s cubic-bezier(0.4, 0, 0.2, 1) both; }
+@keyframes drop { 0% { transform: translateY(-16px); opacity: 0.3; } 100% { transform: none; opacity: 1; } }
+.lever-stalk { transition: transform 0.32s cubic-bezier(0.4, 0, 0.2, 1); }
+.edge.alt.open .route-flash, .edge.alt.open { animation: redirect 0.7s ease-out both; }
+@keyframes redirect { 0% { opacity: 0.35; } 100% { opacity: 1; } }
+.route-mark { animation: dashmove 1.2s linear infinite; }
+.pill.pop .pill-inner { animation: pop 0.34s ease-out both; }
+@keyframes pop { 0% { opacity: 0; } 100% { opacity: 1; } }
+.lever-ghost { opacity: 0.95; }
 
 /* interactive targets */
 .target { cursor: pointer; outline: none; }
 .target .ring { stroke: #f4ede2; stroke-dasharray: 5 7; opacity: 0.32; transition: opacity 0.15s ease; }
 .target:hover .ring { opacity: 0.8; }
-.target.selected .ring { opacity: 1; stroke-dasharray: none; stroke: #edb65a; }
+.target.selected .ring { opacity: 1; stroke-dasharray: none; stroke: #edb65a; animation: select 0.4s ease-out; }
+@keyframes select { 0% { stroke-width: 9; } 100% { stroke-width: 4; } }
 .target.unavailable { cursor: not-allowed; }
 .target:focus-visible .ring { opacity: 1; stroke: #68d7bc; stroke-dasharray: none; stroke-width: 5; }
 .target:focus-visible .hit { stroke: #68d7bc; stroke-width: 2; stroke-dasharray: 3 5; }

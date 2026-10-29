@@ -30,7 +30,7 @@ export const LEVELS: readonly LevelDef[] = [
     allowed: ['bait'],
     budget: 1,
     turnLimit: 2,
-    scenery: [{ x: -400, y: -20, h: 58 }, { x: 410, y: 30, h: 46 }],
+    scenery: [], // A2: decorative tower islands removed (they read as unused nodes)
   },
   {
     id: 'open-the-wrong-door',
@@ -59,7 +59,7 @@ export const LEVELS: readonly LevelDef[] = [
     allowed: ['bait', 'reroute'],
     budget: 2,
     turnLimit: 3,
-    scenery: [{ x: -470, y: 10, h: 54 }, { x: 330, y: -160, h: 50 }],
+    scenery: [], // A2: decorative tower islands removed (they read as unused nodes)
   },
   {
     id: 'keep-the-service-running',
@@ -85,7 +85,7 @@ export const LEVELS: readonly LevelDef[] = [
     allowed: ['bait', 'reroute', 'shutter'],
     budget: 4,
     turnLimit: 4,
-    scenery: [{ x: -300, y: 150, h: 50 }, { x: 330, y: -150, h: 56 }],
+    scenery: [], // A2: decorative tower islands removed (they read as unused nodes)
   },
 ];
 

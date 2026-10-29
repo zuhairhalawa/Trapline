@@ -3,6 +3,7 @@
   --ink-2: #16212b;
   --ink-3: #1e2c39;
   --line: #2b3b4b;
+  --line-strong: #5f7384;
   --graphite: #3a332d;
   --ivory: #f4ede2;
   --ivory-dim: #b9b2a6;
@@ -50,7 +51,7 @@ button, [role="button"] { -webkit-tap-highlight-color: transparent; }
 
 .btn {
   min-height: 48px; min-width: 48px; padding: 0 18px;
-  border-radius: 12px; border: 2px solid var(--line); background: transparent;
+  border-radius: 12px; border: 2px solid var(--line-strong); background: transparent;
   font-weight: 700; letter-spacing: 0.02em;
   transition: transform 0.12s ease, background 0.15s ease, border-color 0.15s ease;
 }
@@ -70,7 +71,7 @@ button, [role="button"] { -webkit-tap-highlight-color: transparent; }
 .chip {
   position: relative; display: inline-flex; align-items: center; gap: 8px;
   min-height: 44px; min-width: 44px; padding: 0 12px; justify-content: center;
-  border-radius: 12px; border: 2px solid var(--line); background: var(--ink-2); color: var(--ivory);
+  border-radius: 12px; border: 2px solid var(--line-strong); background: var(--ink-2); color: var(--ivory);
   font-weight: 700;
 }
 .chip:disabled { opacity: 0.38; }

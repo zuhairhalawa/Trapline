@@ -2,26 +2,43 @@
 
 /* ---------- title ---------- */
 .title {
-  min-height: 100vh; display: grid; grid-template-columns: minmax(380px, 520px) 1fr; align-items: center;
-  gap: 24px; padding: 40px clamp(24px, 5vw, 80px);
+  position: relative; min-height: 100vh; min-height: 100dvh; display: grid; grid-template-columns: minmax(340px, 520px) minmax(0, 1fr); align-items: center;
+  column-gap: clamp(16px, 3vw, 48px); padding: 32px clamp(24px, 5vw, 80px);
   background: radial-gradient(ellipse 70% 70% at 68% 48%, #1d2b38 0%, var(--ink) 70%);
 }
-.title-copy { display: grid; gap: 20px; align-content: center; }
+.title-copy { grid-column: 1; grid-row: 1; display: grid; gap: 14px; align-content: center; min-width: 0; }
+.title-art { grid-column: 2; grid-row: 1; position: relative; min-width: 0; align-self: center; }
+.title-art { margin-right: calc(-1 * clamp(24px, 5vw, 80px)); }
+.title-art img {
+  display: block; width: 100%; height: auto; aspect-ratio: 1.5; object-fit: cover; object-position: 72% 50%;
+  /* feather all four edges into the page so no rectangle shows */
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 14%, #000 86%, transparent), linear-gradient(to right, transparent, #000 16%, #000 100%);
+  -webkit-mask-composite: source-in;
+  mask-image: linear-gradient(to bottom, transparent, #000 14%, #000 86%, transparent), linear-gradient(to right, transparent, #000 16%, #000 100%);
+  mask-composite: intersect;
+}
+.art-tag { position: absolute; right: calc(clamp(24px, 5vw, 80px) + 8px); bottom: 10%; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ivory-dim); opacity: 0.85; }
 .title h1 {
-  font-family: var(--font-display); font-size: clamp(56px, 9vw, 104px); line-height: 0.95; letter-spacing: 0.1em; font-weight: 700;
+  font-family: var(--font-display); font-size: clamp(56px, 8vw, 100px); line-height: 0.95; letter-spacing: 0.1em; font-weight: 700;
   color: var(--ivory);
 }
 .tagline { font-size: 20px; color: var(--ivory-dim); max-width: 24em; }
-.title-actions { margin-top: 6px; }
-.title-levels { display: flex; flex-wrap: wrap; gap: 8px; }
+.title-actions { display: grid; gap: 12px; margin-top: 4px; justify-items: start; }
+.title-levels { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.levels-label { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ivory-dim); margin-right: 4px; }
 .title-levels .chip { padding: 0 14px; }
-.chip-name { font-size: 14px; font-weight: 600; color: var(--ivory-dim); }
-.how { display: grid; gap: 4px; color: var(--ivory-dim); font-size: 15px; }
-.how b { color: var(--ivory); }
-.title-foot { display: flex; gap: 8px; margin-left: -12px; }
-.title-board { min-height: 380px; display: grid; align-items: center; }
-.title-board .board { width: 100%; height: auto; max-height: 78vh; }
-
+.btn.big { min-width: 240px; }
+.chip-name { display: none; }
+.title-demo {
+  margin: 4px 0 0; padding: 8px 10px 12px; display: grid; gap: 6px; border-radius: 18px;
+  background: rgba(22, 33, 43, 0.72); border: 1px solid var(--line);
+}
+.title-demo figcaption { font-size: 13px; color: var(--ivory-dim); padding: 0 4px; }
+.title-demo figcaption b { color: var(--amber); font-weight: 700; }
+.title-foot { display: flex; gap: 4px; }
+.title-foot .link { padding-left: 0; padding-right: 14px; }
+.title-board { display: grid; place-items: center; }
+.title-board .board { width: 100%; height: clamp(200px, 30vh, 260px); }
 /* ---------- game ---------- */
 .game { height: 100vh; height: 100dvh; display: grid; grid-template-rows: auto 1fr; background: radial-gradient(ellipse 80% 80% at 40% 50%, #1a2733 0%, var(--ink) 75%); }
 .topbar {
@@ -44,6 +61,7 @@
 .lg::before { content: ''; display: inline-block; width: 10px; height: 10px; margin-right: 7px; border-radius: 3px; vertical-align: baseline; }
 .lg.coral::before { background: var(--coral); transform: rotate(45deg); border-radius: 1px; }
 .lg.mint::before { background: var(--mint); border-radius: 50%; }
+.lg.queue::before { width: 18px; height: 0; border-top: 3px dashed var(--amber); border-radius: 0; }
 .lg.dash::before { width: 18px; height: 0; border-top: 3px dotted var(--ivory-dim); border-radius: 0; }
 
 .panel {
@@ -88,11 +106,11 @@
 .result.loss h3 { color: var(--coral); }
 .result-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
-.actions { margin-top: auto; display: grid; gap: 10px; padding-top: 6px; }
+.actions { order: 9; margin-top: auto; display: grid; gap: 10px; padding: 8px 0 2px; position: sticky; bottom: -20px; background: linear-gradient(to bottom, rgba(22, 33, 43, 0), #16212b 14px); z-index: 5; }
 .cmd-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
 .cmd {
   position: relative; display: grid; align-content: center; gap: 1px; min-height: 58px; padding: 6px 10px; text-align: left;
-  border-radius: 12px; border: 2px solid var(--line); background: var(--ink-3);
+  border-radius: 12px; border: 2px solid var(--line-strong); background: var(--ink-3);
   transition: border-color 0.15s ease, background 0.15s ease, transform 0.1s ease;
 }
 .cmd:hover:not(:disabled) { border-color: var(--ivory-dim); }
@@ -113,14 +131,42 @@
   .stage { grid-template-columns: minmax(0, 1fr) 320px; }
 }
 
+/* Short landscape (phones on their side, small laptops): board left, scrolling panel right, tray pinned in the panel. */
+@media (max-height: 520px) and (min-width: 641px) {
+  .topbar { padding: 4px clamp(10px, 2vw, 24px); gap: 10px; }
+  .board-wrap { padding: 4px 8px 6px; }
+  .board-wrap .board { max-height: calc(100dvh - 64px); }
+  .legend, .keys, .brief, .tip, .eyebrow { display: none; }
+  .panel { margin: 6px 10px 8px 0; padding: 10px 12px 0; gap: 8px; }
+  .panel h2 { font-size: 20px; }
+  .stats p { padding: 4px 10px; }
+  .actions { bottom: 0; padding: 6px 0 8px; gap: 6px; background: #16212b; }
+  .cmd-row { grid-template-columns: repeat(auto-fit, minmax(66px, 1fr)); gap: 6px; }
+  .cmd { min-height: 48px; padding: 3px 6px; }
+  .cmd-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+  .cmd kbd { display: none; }
+  .btn { min-height: 46px; }
+  .advance { min-height: 48px; }
+  .title { padding: 18px clamp(16px, 4vw, 48px); }
+  .title h1 { font-size: 48px; }
+  .title-demo { display: none; }
+}
+
 @media (max-width: 640px) {
-  .title { grid-template-columns: 1fr; padding: 22px 18px 28px; align-items: start; gap: 6px; }
-  .title-board { order: -1; min-height: 0; margin-bottom: -70px; }
+  .title { grid-template-columns: 1fr; padding: 0 18px 24px; align-items: start; row-gap: 0; }
+  .title-art, .title-copy { grid-column: 1; }
+  .title-art { grid-row: 1; margin: 0 -18px; }
+  .title-copy { grid-row: 2; gap: 12px; }
+  .title-art { margin-right: -18px; }
+  .title-art img { aspect-ratio: 800 / 536; object-position: 50% 50%; -webkit-mask-image: linear-gradient(to bottom, #000 72%, transparent), linear-gradient(to right, transparent, #000 8%, #000 92%, transparent); mask-image: linear-gradient(to bottom, #000 72%, transparent), linear-gradient(to right, transparent, #000 8%, #000 92%, transparent); }
+  .art-tag { right: 18px; bottom: 4px; }
+  .eyebrow { display: block; }
   .title h1 { font-size: 52px; }
   .tagline { font-size: 17px; }
+  .title-actions { justify-items: stretch; }
   .btn.big { width: 100%; }
   .chip-name { display: none; }
-  .how { display: none; }
+  .title-board .board { height: auto; max-height: 320px; }
 
   .game { height: auto; min-height: 100dvh; display: block; }
   .topbar { position: sticky; top: 0; z-index: 10; background: var(--ink); padding: 6px 10px; gap: 6px; }
@@ -134,25 +180,24 @@
   .chip-mark { position: absolute; top: 1px; right: 4px; font-size: 11px; }
   .result { order: -1; }
   .actions.over .cmd-row { display: none; }
-  .stage { display: block; }
+  .stage { display: flex; flex-direction: column; min-height: calc(100dvh - 58px); }
   .board-wrap { padding: 4px 4px 0; }
   .board-wrap .board { height: auto; flex: none; max-height: none; }
   .legend { display: none; }
-  .eyebrow { display: none; }
+  .eyebrow.game-eyebrow, .panel .eyebrow { display: none; }
   .panel-top { order: 0; } .coach { order: 1; } .intel { order: 2; } .explain { order: 3; } .tip { order: 4; }
+  /* The tray is in normal flow and sticks to the bottom: its real height is reserved, nothing can sit behind it. */
   .panel {
-    margin: 6px 10px 0; padding: 14px 14px calc(188px + env(safe-area-inset-bottom)); gap: 12px;
-    overflow: visible; border-radius: 16px; background: transparent; border: 0; padding-left: 4px; padding-right: 4px;
+    flex: 1 1 auto; margin: 6px 10px 0; padding: 8px 4px 0; gap: 10px; overflow: visible; border-radius: 16px; background: transparent; border: 0;
   }
   .panel h2 { font-size: 22px; }
   .brief, .tip, .keys { display: none; }
   .panel-top { gap: 6px; }
   .objective { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 14px; }
-  .panel { gap: 10px; }
   .stats p { padding: 6px 10px; }
   .actions {
-    position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; margin: 0; padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
-    background: rgba(16, 24, 32, 0.97); border-top: 1px solid var(--line); box-shadow: 0 -12px 28px rgba(0, 0, 0, 0.45);
+    position: sticky; bottom: 0; z-index: 20; margin: 6px -14px 0; padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+    background: #101820; border-top: 1px solid var(--line); box-shadow: 0 -12px 28px rgba(0, 0, 0, 0.45);
   }
   .cmd-row { grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)); gap: 6px; }
   .stats { gap: 8px; }
@@ -162,3 +207,17 @@
   .cmd kbd { display: none; }
   .turn-row { gap: 6px; }
 }
+/* landscape phones: keep the info block short so the preview text is visible above the pinned tray */
+@media (max-height: 520px) and (min-width: 641px) {
+  .panel h2 { font-size: 18px; }
+  .objective { display: flex; flex-wrap: wrap; gap: 2px 14px; font-size: 13.5px; margin-top: 0; }
+  .stats p { display: flex; align-items: baseline; justify-content: space-between; padding: 2px 10px; }
+  .stats b { font-size: 18px; }
+  .panel-top { gap: 4px; }
+  .actions.over .cmd-row { display: none; }
+}
+
+/* scrollIntoView / focus scrolling must leave room for the pinned tray (it overlays the scroll area's bottom edge) */
+.panel { scroll-padding-bottom: 170px; }
+@media (max-width: 640px) { html { scroll-padding-bottom: 190px; scroll-padding-top: 64px; } }
+@media (max-height: 520px) and (min-width: 641px) { .panel { scroll-padding-bottom: 140px; } }

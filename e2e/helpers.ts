@@ -36,7 +36,9 @@ export const test = base.extend<{ guard: Guard }>({
 });
 export { expect };
 
-export const QA_DIR = 'docs/qa/a1';
+declare const process: { env: Record<string, string | undefined> };
+/** Screenshot output. Override with TRAPLINE_QA_DIR; the default is git-ignored so a run never overwrites retained evidence. */
+export const QA_DIR = process.env.TRAPLINE_QA_DIR ?? 'test-results/screenshots';
 export const KEY = 'trapline.progress.v1';
 
 export const isMobile = (page: Page) => (page.viewportSize()?.width ?? 1000) <= 640;

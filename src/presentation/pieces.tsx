@@ -16,19 +16,32 @@ export const PAL = {
   coral: '#EF7068',
   amber: '#EDB65A',
   steel: '#8FA3AD',
+  steelL: '#B4C3CA',
+  steelD: '#5D6E77',
+  slate: '#46545C',
 } as const;
 
 /** Iso ratio for ~30 degree projection. */
 export const K = 0.577;
 
-export function IsoBox(props: { hw: number; h: number; top: string; left: string; right: string; children?: ReactNode }) {
-  const { hw, h, top, left, right, children } = props;
+/**
+ * Isometric block. The soft bevel (light front-top edges, dark front corner) is the "matte ceramic" cue
+ * taken from the generated design reference (art/reference/trapline-design-sheet.jpg).
+ */
+export function IsoBox(props: { hw: number; h: number; top: string; left: string; right: string; bevel?: boolean; children?: ReactNode }) {
+  const { hw, h, top, left, right, bevel = true, children } = props;
   const hh = hw * K;
   return (
     <g>
       <polygon points={`${-hw},0 0,${hh} 0,${hh - h} ${-hw},${-h}`} fill={left} />
       <polygon points={`0,${hh} ${hw},0 ${hw},${-h} 0,${hh - h}`} fill={right} />
       <polygon points={`${-hw},${-h} 0,${hh - h} ${hw},${-h} 0,${-hh - h}`} fill={top} />
+      {bevel && (
+        <>
+          <polyline points={`${-hw},${-h} 0,${hh - h} ${hw},${-h}`} fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="1.3" strokeLinejoin="round" />
+          <line x1="0" y1={hh} x2="0" y2={hh - h} stroke="rgba(0,0,0,0.16)" strokeWidth="1.2" />
+        </>
+      )}
       {children}
     </g>
   );
@@ -44,9 +57,8 @@ export function Tile({ tint }: { tint?: string }) {
   const hh = hw * K;
   return (
     <g transform="translate(0 12)">
-      <IsoBox hw={hw} h={12} top={tint ?? PAL.tile} left={PAL.tileL} right={PAL.tileR} />
+      <IsoBox hw={hw} h={12} top={tint ?? PAL.tile} left={PAL.tileL} right={PAL.tileR} bevel={false} />
       <polygon points={`${-hw + 6},0 0,${hh - 3.5} ${hw - 6},0 0,${-hh + 3.5}`} transform="translate(0 -12)" fill="none" stroke="rgba(244,237,226,0.10)" strokeWidth="1.5" />
-      <ellipse cx="0" cy="-12" rx="0" ry="0" />
     </g>
   );
 }
@@ -66,24 +78,6 @@ export function ServerBox({ hw = 26, h = 14, led = PAL.mint }: { hw?: number; h?
   );
 }
 
-export function Tower({ h }: { h: number }) {
-  const hw = 22;
-  return (
-    <IsoBox hw={hw} h={h} top={PAL.ivory} left={PAL.ivoryL} right={PAL.ivoryR}>
-      <g transform={leftFace(hw)} stroke="#a89e8e" strokeWidth="1.8" strokeLinecap="round">
-        {Array.from({ length: Math.floor(h / 12) - 1 }, (_, i) => (
-          <line key={i} x1={-hw + 5} y1={-10 - i * 12} x2={-6} y2={-10 - i * 12} />
-        ))}
-      </g>
-      <g transform={rightFace(hw)}>
-        {Array.from({ length: Math.floor(h / 12) - 1 }, (_, i) => (
-          <circle key={i} cx={8} cy={-10 - i * 12} r={1.8} fill={i % 2 ? PAL.amber : PAL.mint} opacity="0.8" />
-        ))}
-      </g>
-    </IsoBox>
-  );
-}
-
 export function Vault({ breached }: { breached: boolean }) {
   const hw = 32;
   const h = 38;
@@ -98,10 +92,11 @@ export function Vault({ breached }: { breached: boolean }) {
           <circle cx={-7} cy={-8} r="2" />
         </g>
         <g transform={rightFace(hw)}>
-          <path d="M11.5 -24 v-6.5 a4.5 4.5 0 0 1 9 0 v6.5" fill="none" stroke={PAL.ink} strokeWidth="3.2" strokeLinecap="round" />
-          <rect x="8" y="-25" width="16" height="14" rx="2.5" fill={PAL.ink} />
-          <circle cx="16" cy="-19.5" r="2.3" fill={PAL.ivory} />
-          <rect x="15" y="-19" width="2" height="5" rx="1" fill={PAL.ivory} />
+          <rect x="4" y="-33" width="24" height="26" rx="4" fill={PAL.ink} />
+          <path d="M11.5 -21 v-5.5 a4.5 4.5 0 0 1 9 0 v5.5" fill="none" stroke={PAL.ivory} strokeWidth="2.6" strokeLinecap="round" />
+          <rect x="9" y="-21" width="14" height="11" rx="2.5" fill={PAL.ivory} />
+          <circle cx="16" cy="-16.5" r="2" fill={PAL.ink} />
+          <rect x="15.2" y="-16" width="1.6" height="4" rx="0.8" fill={PAL.ink} />
         </g>
       </IsoBox>
     </g>
@@ -141,42 +136,121 @@ export function DropDock({ delivered }: { delivered: boolean }) {
   );
 }
 
+/* ---------------- honeypot ----------------
+ * One object, three clearly different states (from the design reference: low amber box on a steel base
+ * plate, side hinge, gear mechanism, latch):
+ *   idle   - dull amber, lid ajar (30 deg), dashed ring, no light.
+ *   armed  - bright amber, lid raised (66 deg), red LED, bait morsel, solid pulsing ring.
+ *   sprung - lid shut around the scout (it stays visible through the clamp collar).
+ * TrapBack is drawn under the actor, TrapFront over it, so a scout standing on the node sits inside the box.
+ */
+const TB = { hw: 27, h: 17, D: 34 };
+const trapColors = (lit: boolean) =>
+  lit
+    ? { top: '#EDB65A', left: '#C99440', right: '#A57731', rim: '#F7D58F' }
+    : { top: '#B59A63', left: '#927A4A', right: '#78633A', rim: '#CDB787' };
+
+/** Lid corners when raised by `deg` about the back-right hinge edge. */
+function lidCorners(deg: number) {
+  const { hw, h, D } = TB;
+  const hh = hw * K;
+  const r = (deg * Math.PI) / 180;
+  const cs = Math.cos(r);
+  const sn = Math.sin(r);
+  const dx = -hw * cs;
+  const dy = hh * cs - D * sn;
+  const H1 = { x: 0, y: -hh - h };
+  const H2 = { x: hw, y: -h };
+  return { H1, H2, L1: { x: H1.x + dx, y: H1.y + dy }, L2: { x: H2.x + dx, y: H2.y + dy } };
+}
+
 export function TrapBack({ armed, closed }: { armed: boolean; closed: boolean }) {
-  const col = armed || closed ? PAL.amber : '#8d7448';
-  const bars = Array.from({ length: 5 }, (_, i) => ((i + 0.5) * Math.PI) / 5);
-  const bar = (th: number, back: boolean) => {
-    const s = back ? -1 : 1;
-    const sn = Math.abs(Math.sin(th)) * s;
-    return <line key={`${back}${th}`} x1={30 * Math.cos(th)} y1={17 * sn} x2={22 * Math.cos(th)} y2={-40 + 12.7 * sn} />;
-  };
+  const { hw, h } = TB;
+  const hh = hw * K;
+  const lit = armed || closed;
+  const c = trapColors(lit);
+  const iw = hw - 7;
+  const ih = iw * K;
+  const g = lidCorners(armed ? 66 : 30);
   return (
     <g className={`trap ${armed ? 'armed' : 'idle'} ${closed ? 'closed' : ''}`}>
-      <ellipse className="trap-ring" cx="0" cy="0" rx="38" ry="22" fill="rgba(237,182,90,0.10)" stroke={col} strokeWidth="3" strokeDasharray={armed || closed ? undefined : '6 6'} />
-      <g stroke={col} strokeWidth="3.2" strokeLinecap="round" opacity="0.9">
-        {bars.map((t) => bar(t, true))}
-        <ellipse cx="0" cy="-40" rx="22" ry="12.7" fill="none" strokeWidth="2.6" />
+      <ellipse
+        className="trap-ring" cx="0" cy="2" rx="40" ry="23" fill="rgba(237,182,90,0.10)"
+        stroke={lit ? PAL.amber : '#8d7448'} strokeWidth="3" strokeDasharray={lit ? undefined : '6 6'}
+      />
+      <IsoBox hw={36} h={4} top="#9FB1BA" left="#74868F" right="#5D6E77" />
+      <g transform="translate(0 -4)">
+        <polygon points={`${-hw},${-h} 0,${hh - h} ${hw},${-h} 0,${-hh - h}`} fill={c.top} />
+        {!closed && (
+          <g className="trap-inside">
+            <polygon points={`${-iw},${-h} 0,${ih - h} ${iw},${-h} 0,${-ih - h}`} fill="#2a2420" />
+            <g transform={`translate(5 ${-h})`}>
+              <circle r="6.2" fill={PAL.steelD} stroke={PAL.steelL} strokeWidth="1.4" strokeDasharray="2.2 1.6" />
+              <circle r="2.2" fill={PAL.slate} />
+            </g>
+            <rect x="-12" y={-h - 2} width="8" height="3.4" rx="1.2" fill={PAL.steelD} />
+            {armed && <circle className="led" cx="-8" cy={-h - 1} r="2.3" fill={PAL.coral} />}
+          </g>
+        )}
+        {/* hinge barrel along the back-right edge */}
+        <line x1={g.H1.x} y1={g.H1.y} x2={g.H2.x} y2={g.H2.y} stroke={PAL.steel} strokeWidth="5" strokeLinecap="round" />
+        <line x1={g.H1.x} y1={g.H1.y} x2={g.H2.x} y2={g.H2.y} stroke="rgba(255,255,255,0.45)" strokeWidth="1.4" strokeLinecap="round" />
+        {closed ? (
+          <g className="lid-back">
+            <polygon points={`${-hw},${-h - 3} 0,${-hh - h - 3} ${hw},${-h - 3}`} fill={c.top} stroke={c.rim} strokeWidth="1.2" strokeLinejoin="round" />
+            <path d={`M-13 ${-h - 3} A13 6 0 0 1 13 ${-h - 3}`} fill="none" stroke={PAL.steelD} strokeWidth="3.5" />
+          </g>
+        ) : (
+          <g className="lid-open">
+            <polygon
+              points={`${g.H1.x},${g.H1.y} ${g.H2.x},${g.H2.y} ${g.L2.x},${g.L2.y} ${g.L1.x},${g.L1.y}`}
+              fill={armed ? PAL.slate : '#5a5148'} stroke={c.top} strokeWidth="3.2" strokeLinejoin="round"
+            />
+            <circle cx={(g.L1.x + g.L2.x) / 2 + 2} cy={(g.L1.y + g.L2.y) / 2 + 3} r="1.8" fill={PAL.steelL} />
+            <circle cx={(g.H1.x + g.H2.x) / 2 - 2} cy={(g.H1.y + g.H2.y) / 2 + 9} r="1.8" fill={PAL.steelL} />
+          </g>
+        )}
+        {armed && !closed && (
+          <g className="morsel">
+            <path d={`M0 ${-h - 12} L7 ${-h - 6} L0 ${-h} L-7 ${-h - 6}Z`} fill={PAL.amber} stroke="#fff3d6" strokeWidth="1.2" />
+          </g>
+        )}
       </g>
-      {armed && !closed && (
-        <g className="morsel">
-          <path d="M0 -11 L7 -5 L0 1 L-7 -5Z" fill={PAL.amber} stroke="#fff3d6" strokeWidth="1.2" />
-        </g>
-      )}
     </g>
   );
 }
 
 export function TrapFront({ armed, closed }: { armed: boolean; closed: boolean }) {
-  const col = armed || closed ? PAL.amber : '#8d7448';
-  const bars = Array.from({ length: 5 }, (_, i) => ((i + 0.5) * Math.PI) / 5);
+  const { hw, h } = TB;
+  const hh = hw * K;
+  const lit = armed || closed;
+  const c = trapColors(lit);
   return (
     <g className={`trap-front ${closed ? 'closed' : ''} ${armed ? 'armed' : ''}`}>
-      <g stroke={col} strokeWidth={closed ? 2.4 : 3.4} strokeLinecap="round" opacity={closed ? 0.8 : 1}>
-        {bars.map((th) => (
-          <line key={th} x1={30 * Math.cos(th)} y1={17 * Math.sin(th)} x2={22 * Math.cos(th)} y2={-40 + 12.7 * Math.sin(th)} />
-        ))}
+      <g transform="translate(0 -4)">
+        <polygon points={`${-hw},0 0,${hh} 0,${hh - h} ${-hw},${-h}`} fill={c.left} />
+        <polygon points={`0,${hh} ${hw},0 ${hw},${-h} 0,${hh - h}`} fill={c.right} />
+        <polyline points={`${-hw},${-h} 0,${hh - h} ${hw},${-h}`} fill="none" stroke={c.rim} strokeWidth="1.5" strokeLinejoin="round" />
+        <line x1="0" y1={hh} x2="0" y2={hh - h} stroke="rgba(0,0,0,0.2)" strokeWidth="1.2" />
+        <g transform={leftFace(hw)} fill={PAL.steelL}>
+          <circle cx={-hw + 5} cy={-h + 4} r="1.5" />
+          <circle cx={-6} cy={-h + 4} r="1.5" />
+        </g>
+        <g transform={rightFace(hw)}>
+          <rect x="6" y={-h + 2.5} width="14" height="9" rx="2" fill={PAL.steel} stroke={PAL.steelD} strokeWidth="1" />
+          <circle cx="13" cy={-h + 7} r="2" fill={PAL.slate} />
+          <circle cx="23" cy={-h + 4} r="1.5" fill={PAL.steelL} />
+          {armed && <circle className="led" cx="22" cy={-4} r="2.6" fill={PAL.coral} stroke="#ffd3cf" strokeWidth="0.8" />}
+        </g>
+        {closed && (
+          <g className="lid-front">
+            <polygon points={`${-hw},${-h} 0,${hh - h} 0,${hh - h - 3} ${-hw},${-h - 3}`} fill="#DFA94F" />
+            <polygon points={`0,${hh - h} ${hw},${-h} ${hw},${-h - 3} 0,${hh - h - 3}`} fill="#B98536" />
+            <polygon points={`${-hw},${-h - 3} 0,${hh - h - 3} ${hw},${-h - 3}`} fill={c.top} stroke={c.rim} strokeWidth="1.2" strokeLinejoin="round" />
+            <path d={`M-13 ${-h - 3} A13 6 0 0 0 13 ${-h - 3}`} fill="none" stroke={PAL.steelL} strokeWidth="3.5" />
+          </g>
+        )}
       </g>
-      <path d="M-22 -40 A22 12.7 0 0 0 22 -40" fill="none" stroke={col} strokeWidth="3" />
-      <ellipse className="lid" cx="0" cy="-40" rx="22" ry="12.7" fill={PAL.amber} stroke="#fff3d6" strokeWidth="1.5" />
     </g>
   );
 }
@@ -200,6 +274,11 @@ export function Intruder({ expression, ghost = false }: { expression: Expression
       <polygon points="0,-46 -15,-30 -12,-10 0,-3" fill="#F58A82" />
       <polygon points="0,-46 15,-30 12,-10 0,-3" fill={PAL.coral} />
       <polygon points="-11,-9 0,0 11,-9 0,-3" fill="#B84842" />
+      <polyline points="-15,-30 0,-46 15,-30" fill="none" stroke="rgba(255,255,255,0.45)" strokeWidth="1.3" strokeLinejoin="round" />
+      <polygon points="-9,-5 -4,-1.5 -9,0.5 -13,-2" fill={PAL.steel} />
+      <polygon points="9,-5 4,-1.5 9,0.5 13,-2" fill={PAL.steelD} />
+      <circle cx="-14" cy="-18" r="1.8" fill={PAL.steelL} />
+      <circle cx="14" cy="-18" r="1.8" fill={PAL.steelD} />
       <polygon points={visor} fill={PAL.ink} />
       {expression === 'captured' ? (
         <path d="M-5 -26 l4 3 m0 -3 l-4 3" stroke={PAL.ivory} strokeWidth="1.6" strokeLinecap="round" opacity="0.8" />
@@ -219,12 +298,14 @@ export function Courier({ delivered, ghost = false }: { delivered: boolean; ghos
         <rect x="-11" y="-11" width="22" height="22" rx="6" transform="rotate(45)" fill="#4DBFA3" />
         <path d="M0 -15.5 L15.5 0 L0 0Z" fill={PAL.mint} />
         <path d="M0 -15.5 L-15.5 0 L0 0Z" fill="#8BE8D0" />
+        <path d="M0 -15.5 L-15.5 0" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="1.2" />
+        <circle cx="-8.5" cy="1" r="2.2" fill={PAL.steel} />
         {delivered ? (
           <path d="M-6 0 L-2 4 L6 -5" fill="none" stroke={PAL.ink} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
         ) : (
           <g>
-            <rect x="-5" y="-5" width="10" height="10" rx="2.5" transform="rotate(45)" fill={PAL.ivory} />
-            <path d="M-3.5 -1 L0 1.8 L3.5 -1" fill="none" stroke={PAL.ink} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+            <rect x="-6.5" y="-4" width="13" height="9.5" rx="1.6" fill={PAL.ivory} stroke={PAL.ink} strokeWidth="1" />
+            <path d="M-6.5 -3.4 L0 1.6 L6.5 -3.4" fill="none" stroke={PAL.ink} strokeWidth="1.2" strokeLinejoin="round" />
           </g>
         )}
       </g>
@@ -232,7 +313,7 @@ export function Courier({ delivered, ghost = false }: { delivered: boolean; ghos
   );
 }
 
-export function Gate({ open, ux, uy }: { open: boolean; ux: number; uy: number }) {
+export function Gate({ open, ux, uy, ghost = false }: { open: boolean; ux: number; uy: number; ghost?: boolean }) {
   // (ux,uy): unit screen vector along the edge. The gate spans across it.
   const px = -uy;
   const py = ux * 0.6;
@@ -240,21 +321,63 @@ export function Gate({ open, ux, uy }: { open: boolean; ux: number; uy: number }
   const a = { x: px * len, y: py * len };
   const post = (s: number) => (
     <g key={s} transform={`translate(${s * a.x} ${s * a.y})`}>
-      <rect x="-5" y="-34" width="10" height="34" rx="2" fill={PAL.ivoryL} />
-      <rect x="-5" y="-34" width="5" height="34" rx="2" fill={PAL.ivory} />
-      <circle cx="0" cy="-30" r="2" fill={open ? PAL.mint : PAL.coral} />
+      <rect x="-6" y="-35" width="12" height="35" rx="3" fill={PAL.ivoryL} />
+      <rect x="-6" y="-35" width="6" height="35" rx="3" fill={PAL.ivory} />
+      <rect x="-6" y="-8" width="12" height="4" fill={PAL.steel} />
+      <circle cx="0" cy="-30" r="2.4" fill={open ? PAL.mint : PAL.coral} />
     </g>
   );
   const slat = (h: number, key: number) => (
     <line key={key} x1={-a.x} y1={-a.y - h} x2={a.x} y2={a.y - h} />
   );
   return (
-    <g className={open ? 'gate open' : 'gate closed'}>
+    <g className={`gate ${open ? 'open' : 'closed'} ${ghost ? 'ghost-gate' : ''}`}>
       {post(-1)}
       <g className="slats" stroke={PAL.steel} strokeWidth="5.5" strokeLinecap="round">
         {open ? <g opacity="0.55">{slat(38, 0)}</g> : [slat(5, 0), slat(13, 1), slat(21, 2), slat(29, 3)]}
       </g>
       {post(1)}
+    </g>
+  );
+}
+
+export interface Vec { x: number; y: number }
+
+/**
+ * Two-way junction: steel plate with a frosted T-lever (see the reference sheet). Two arrows on the plate point
+ * along the two branches. Solid amber = live branch, dashed = the other. When a Reroute is queued the ghost
+ * lever swings to the alternate arrow and that arrow lights up.
+ */
+export function JunctionPiece({ cur, alt, queued }: { cur: Vec; alt: Vec; queued: boolean }) {
+  const arrow = (d: Vec, style: 'live' | 'off' | 'next') => {
+    const tip = { x: d.x * 25, y: d.y * 15 };
+    const bc = { x: d.x * 12, y: d.y * 7 };
+    const n = { x: -d.y * 7, y: d.x * 4 };
+    const pts = `${tip.x},${tip.y} ${bc.x + n.x},${bc.y + n.y} ${bc.x - n.x},${bc.y - n.y}`;
+    if (style === 'live') return <polygon points={pts} fill={PAL.amber} stroke={PAL.ink} strokeWidth="1.4" strokeLinejoin="round" />;
+    if (style === 'next') return <polygon className="queued-arrow" points={pts} fill="rgba(237,182,90,0.35)" stroke={PAL.amber} strokeWidth="2" strokeDasharray="3 2" strokeLinejoin="round" />;
+    return <polygon points={pts} fill="none" stroke={PAL.ivory} strokeWidth="1.6" strokeDasharray="3 2.5" strokeLinejoin="round" opacity="0.75" />;
+  };
+  const tilt = (d: Vec) => Math.max(-32, Math.min(32, d.x * 34));
+  const stalk = (angle: number, ghost: boolean) => (
+    <g className={ghost ? 'lever-ghost' : 'lever-stalk'} style={{ transform: `translate(0px, -5px) rotate(${angle}deg)` }}>
+      <line x1="0" y1="0" x2="0" y2="-17" stroke={PAL.ink} strokeWidth="7" strokeLinecap="round" opacity={ghost ? 0.5 : 1} />
+      <line x1="0" y1="0" x2="0" y2="-17" stroke={ghost ? PAL.amber : PAL.ivory} strokeWidth="4" strokeLinecap="round" strokeDasharray={ghost ? '3 3' : undefined} opacity={ghost ? 0.9 : 0.92} />
+      <line x1="-8" y1="-17" x2="8" y2="-17" stroke={PAL.ink} strokeWidth="9" strokeLinecap="round" opacity={ghost ? 0.5 : 1} />
+      <line x1="-8" y1="-17" x2="8" y2="-17" stroke={ghost ? PAL.amber : PAL.ivory} strokeWidth="6" strokeLinecap="round" strokeDasharray={ghost ? '3 3' : undefined} opacity={ghost ? 0.9 : 0.92} />
+    </g>
+  );
+  return (
+    <g className={`junction ${queued ? 'queued' : ''}`}>
+      <ellipse cx="0" cy="8" rx="34" ry="17" fill="rgba(0,0,0,0.38)" />
+      <IsoBox hw={30} h={6} top="#9FB1BA" left="#74868F" right="#5D6E77" />
+      <g transform="translate(0 -6)">
+        {arrow(cur, queued ? 'off' : 'live')}
+        {arrow(alt, queued ? 'next' : 'off')}
+        <circle r="4.6" fill={PAL.slate} stroke={PAL.steelL} strokeWidth="1.3" />
+        {stalk(tilt(cur), false)}
+        {queued && stalk(tilt(alt), true)}
+      </g>
     </g>
   );
 }
